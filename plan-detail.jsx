@@ -14,7 +14,7 @@ const PRICE = {
 };
 
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, directions, transitDirections,
-  onBack, onSelectStop, onAdvance, onEndWalk, onFork }) {
+  onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
   const label = [theme, walk.area].filter(Boolean).join(" · ");
@@ -44,6 +44,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
       <a href={directions} target="_blank" rel="noreferrer">Directions <Icon name="external" size={14}/></a>
     </div>}
     {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
+    {rankSlot}
 
     {walk.tStation && <section className="t-card" aria-label="Getting there by T">
       <div className="t-card-head">

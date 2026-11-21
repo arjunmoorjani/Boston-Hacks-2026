@@ -7,11 +7,13 @@ import { Icon } from "./icons";
 import { RouteList } from "./route-list";
 import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
+import { ProfilePage, RankPrompt, Avatar } from "./profile";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
 import { loadRoutes } from "../lib/routes.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
+import { completionFor, emptyProfile, loadProfile, saveProfile } from "../lib/profile-store.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -26,7 +28,9 @@ export default function Home() {
   const [locationStatus, setLocationStatus] = useState("");
   const [step, setStep] = useState(null);
   const [complete, setComplete] = useState(false);
-  const [customWalk, setCustomWalk] = useState(null);
+  const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [draftPlaces, setDraftPlaces] = useState([]);
   const [building, setBuilding] = useState(false);
   const [routeError, setRouteError] = useState("");
@@ -36,7 +40,7 @@ export default function Home() {
   const [removed, setRemoved] = useState(null);   // last removed stop, for Undo
   const [editFrom, setEditFrom] = useState("list");
   const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
-  const availableWalks = customWalk ? [...walks, customWalk] : walks;
+  const availableWalks = [...walks, ...profile.customWalks];
   const walk = availableWalks[routeIndex];
   const stats = walkStats(walk);
   // While editing, the map shows the draft (straight lines between stops) so reordering is visible right away.
@@ -63,6 +67,15 @@ export default function Home() {
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    setProfile(loadProfile()); // browser-only, so after the first render
+    setProfileLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (profileLoaded) saveProfile(profile);
+  }, [profile, profileLoaded]);
+  const updateProfile = change => setProfile(old => ({ ...old, ...(typeof change === "function" ? change(old) : change) }));
 
   useEffect(() => {
     if (!following) return;
@@ -105,11 +118,28 @@ export default function Home() {
     setLocationStatus("");
   }
 
+  function openWalk(id) {
+    const index = availableWalks.findIndex(item => item.id === id);
+    if (index < 0) return false;
+    changeRoute(index);
+    setView("detail");
+    setShowProfile(false);
+    collapseSheet();
+    return true;
+  }
+
+  function deleteCustomWalk(id) {
+    const index = availableWalks.findIndex(item => item.id === id);
+    updateProfile(old => ({ customWalks: old.customWalks.filter(item => item.id !== id), ranking: old.ranking.filter(item => item !== id) }));
+    if (index >= 0 && index <= routeIndex) { changeRoute(0); setView("list"); }
+  }
+
   function advance() {
     if (step === walk.stops.length - 1) {
       setStep(null);
       setSelected(null);
       setComplete(true);
+      updateProfile(old => ({ completions: [completionFor(walk, stats), ...old.completions] }));
       return;
     }
     const next = step === null ? 0 : step + 1;
@@ -198,11 +228,12 @@ export default function Home() {
     setRouteError("");
     try {
       const route = await buildWalkingRoute(stops);
-      setCustomWalk({
-        ...route, id: "custom", title: draftTitle.trim(), area: "Your plan", category: "Custom walk",
+      const saved = {
+        ...route, id: `custom:${Date.now()}`, title: draftTitle.trim(), area: "Your plan", category: "Custom walk",
         symbol: "route", description: "Visit your selected places in the order shown.", stops,
-      });
-      changeRoute(walks.length);
+      };
+      updateProfile(old => ({ customWalks: [...old.customWalks, saved] }));
+      changeRoute(walks.length + profile.customWalks.length);
       setView("detail");
       setDraftPlaces([]);
       setRemoved(null);
@@ -230,7 +261,12 @@ export default function Home() {
 
     <header className="topbar">
       <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
-      <div className="city"><span/> BOSTON, MA</div>
+      <div className="topbar-right">
+        <div className="city"><span/> BOSTON, MA</div>
+        <button type="button" className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Your profile">
+          <Avatar name={profile.name} size={34}/>
+        </button>
+      </div>
     </header>
 
     {/* Phones: transparent space over the map; scrolling the page pulls the sheet up over it. */}
@@ -249,9 +285,16 @@ export default function Home() {
             directions={directions} transitDirections={transitDirections}
             onBack={() => { setView("list"); setStep(null); setSelected(null); collapseSheet(); }}
             onSelectStop={index => { setSelected(index); collapseSheet(); }}
-            onAdvance={advance} onEndWalk={() => { setStep(null); setSelected(null); }} onFork={fork}/>
+            onAdvance={advance} onEndWalk={() => { setStep(null); setSelected(null); }} onFork={fork}
+            rankSlot={complete && !profile.ranking.includes(walk.id) && <RankPrompt newId={walk.id} ranking={profile.ranking}
+              titleOf={id => availableWalks.find(item => item.id === id)?.title ?? profile.completions.find(c => c.walkId === id)?.title ?? id}
+              onDone={ranking => updateProfile({ ranking })}/>}/>
         : <RouteList walks={availableWalks} index={routeIndex} status={walksStatus}
             onChange={index => { changeRoute(index); setView("detail"); collapseSheet(); }}/>}
     </section>
+    {showProfile && <ProfilePage profile={profile} walks={availableWalks} onClose={() => setShowProfile(false)}
+      onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
+      onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
+      onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
   </main>;
 }
