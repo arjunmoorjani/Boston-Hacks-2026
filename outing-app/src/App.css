@@ -1,0 +1,80 @@
+.outing {
+  width: min(36rem, calc(100% - 2rem));
+  margin: 2rem auto;
+  text-align: left;
+}
+
+.outing h1 {
+  line-height: 1.1;
+}
+
+.outing h2 {
+  margin-top: 1.5rem;
+}
+
+.outing fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.outing label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-h);
+}
+
+.outing input,
+.outing button {
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
+.outing input {
+  width: 100%;
+  min-width: 0;
+}
+
+.outing button {
+  cursor: pointer;
+}
+
+.outing button[type='submit'] {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.outing button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.outing :is(input, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.stops {
+  padding-inline-start: 1.5rem;
+}
+
+.stops li + li,
+.outing [role]:not(:empty) {
+  margin-top: 0.75rem;
+}
+
+.stop-input,
+.outing-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.outing-actions {
+  flex-wrap: wrap;
+}
