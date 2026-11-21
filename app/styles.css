@@ -28,6 +28,10 @@ button:focus-visible, a:focus-visible, .map:focus-visible { outline: 3px solid #
 .intro { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding: 28px 0 23px; }
 h1, h2, p { margin: 0; }
 h1 { font-size: clamp(2.4rem, 5.7vw, 4.7rem); font-weight: 800; line-height: 1; letter-spacing: -.08em; }
+.route-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 9px; padding: 0; border: 0; }
+.route-filters legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.route-filters label { display: flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 99px; background: #fff; font-size: .78rem; font-weight: 700; }
+.route-filters input { accent-color: var(--purple); }
 .routes { display: flex; gap: 8px; flex-wrap: wrap; }
 .routes button { border: 1px solid #d8dbd0; background: #fff; border-radius: 99px; padding: 10px 15px; display: flex; align-items: center; gap: 7px; font-size: .88rem; font-weight: 700; white-space: nowrap; }
 .routes button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
@@ -57,6 +61,7 @@ h1 { font-size: clamp(2.4rem, 5.7vw, 4.7rem); font-weight: 800; line-height: 1; 
 .attribution { position: absolute; right: 0; bottom: 0; background: #fffe; font-size: .66rem; padding: 3px 8px; }
 
 .sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 24px; padding: 25px; }
+.empty-walk p { color: var(--muted); line-height: 1.55; }
 .walk-category { color: #4d328e; font-weight: 800; font-size: .82rem; }
 .walk-category > span { padding: 0 3px; }
 h2 { margin: 6px 0 13px; font-size: clamp(1.8rem, 3.1vw, 2.5rem); line-height: 1.05; font-weight: 800; letter-spacing: -.057em; }
@@ -64,11 +69,31 @@ h2 { margin: 6px 0 13px; font-size: clamp(1.8rem, 3.1vw, 2.5rem); line-height: 1
 .stats > span { display: inline-flex; align-items: center; gap: 5px; font-size: .84rem; font-weight: 700; }
 .stats-pin { width: 12px; height: 12px; border: 1px solid var(--ink); background: var(--yellow); border-radius: 50%; }
 .description { color: var(--muted); line-height: 1.55; margin-bottom: 17px; }
+.route-status { margin-bottom: 13px; padding: 9px 10px; border-radius: 10px; background: #fff3c7; font-size: .84rem; }
+.to-start { margin-bottom: 13px; padding: 12px; border-radius: 12px; background: #f8f7f2; }
+.to-start-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 9px; }
+.to-start h3 { margin: 0; font-size: .98rem; }
+.travel-modes { display: flex; gap: 4px; }
+.travel-modes button { padding: 6px 9px; border: 1px solid var(--line); border-radius: 99px; background: #fff; font-size: .76rem; font-weight: 700; }
+.travel-modes button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+.to-start > .catalog-button { width: 100%; }
+.to-start > p { margin-top: 8px; color: var(--muted); font-size: .82rem; }
+.to-start-result { display: flex; justify-content: space-between; gap: 10px; }
+.to-start-result strong { color: var(--ink); }
 .itinerary-toggle { border: 0; border-top: 1px solid var(--line); background: none; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 13px 0; font-weight: 800; }
 .itinerary { list-style: none; padding: 0; margin: 0 0 12px; }
 .itinerary li button { display: flex; text-align: left; align-items: center; gap: 10px; width: 100%; padding: 8px 5px; border: 0; border-radius: 8px; background: none; }
 .itinerary li button:hover, .itinerary li button[aria-pressed="true"] { background: #f3effd; }
 .itinerary small { display: block; margin-top: 2px; color: var(--muted); }
+.route-directions { margin: 2px 0 15px; border-top: 1px solid var(--line); }
+.route-directions h3 { margin: 14px 0 8px; font-size: 1rem; }
+.route-directions details { border-top: 1px solid var(--line); }
+.route-directions summary { padding: 10px 2px; cursor: pointer; font-size: .84rem; }
+.route-directions summary span, .route-directions summary small { display: block; }
+.route-directions summary small, .route-directions li small { margin-top: 3px; color: var(--muted); }
+.route-directions ol { margin: 0 0 10px; padding-left: 25px; }
+.route-directions li { padding: 4px 0; color: var(--muted); font-size: .82rem; }
+.route-directions li small { display: block; }
 .mini-pin { display: grid; place-items: center; flex: 0 0 25px; width: 25px; height: 25px; border-radius: 50%; background: var(--yellow); border: 1px solid var(--ink); font-size: .78rem; font-weight: 800; }
 .stop-preview, .walk-progress, .completed { padding: 10px; margin-bottom: 12px; background: #f3effd; border-radius: 12px; font-size: .9rem; }
 .stop-preview { display: flex; align-items: start; gap: 8px; }
