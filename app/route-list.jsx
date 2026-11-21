@@ -25,7 +25,7 @@ export function duration(min) {
 
 export const costLabel = cost => (cost === "free" ? "Free" : cost) || null;
 
-function summary(walk) {
+export function summary(walk) {
   return [`${walk.stops.length} stops`, duration(walk.durationMin), costLabel(walk.cost)]
     .filter(Boolean).join(" · ");
 }

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
+import { Icon } from "./icons";
+import { summary } from "./route-list";
+
+const ROUTE = "#5839b5";
 
 function fitWalks({ map, maps }, walks) {
   const visible = walks.filter(walk => walk?.path?.length);
@@ -52,12 +56,14 @@ function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, clas
   return marker;
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onPlaceClick, directions }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onPlaceClick, onOpenWalk, directions }) {
   const container = useRef(null);
   const stops = useRef([]);
+  const routeLines = useRef([]); // visible route lines, so a tapped route can fade the others
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
   const [mapError, setMapError] = useState("");
+  const [peekId, setPeekId] = useState(null); // the route line you tapped on the overview map
   const placeClick = useRef(onPlaceClick);
   placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
 
@@ -79,7 +85,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
       });
       // Tapping a place icon on the map opens its profile (app/place-profile.jsx) instead of Google's popup.
       poiClickListener = map.addListener("click", event => {
-        if (!("placeId" in event) || !event.placeId) return;
+        if (!("placeId" in event) || !event.placeId) { setPeekId(null); return; } // tapping empty map closes the route card
         event.stop();
         placeClick.current?.(event.placeId, { point: event.latLng ? [event.latLng.lat(), event.latLng.lng()] : null });
       });
@@ -102,17 +108,30 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     return () => layer.setMap(null);
   }, [context, transit]);
 
+  // Overview map (every walk at once): each line can be tapped to see which walk it is.
+  const overview = !walk.path.length && walks.length > 1;
+  const peek = overview ? walks.find(item => item.id === peekId) : null;
+  useEffect(() => { if (!overview) setPeekId(null); }, [overview]);
+
   useEffect(() => {
     if (!context) return;
     const { map, maps } = context;
     const lines = walks.flatMap(item => {
       const path = item.path.map(mapPoint);
       if (!path.length) return [];
-      return [
+      const drawn = [
         new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: walk.path.length ? 10 : 7, clickable: false }),
-        new maps.Polyline({ map, path, strokeColor: "#5839b5", strokeWeight: walk.path.length ? 6 : 4, clickable: false, zIndex: 1 }),
+        new maps.Polyline({ map, path, strokeColor: ROUTE, strokeWeight: walk.path.length ? 6 : 4, clickable: false, zIndex: 1 }),
       ];
+      if (overview) {
+        // a wide invisible line on top so a finger doesn't have to hit the 4px route exactly
+        const hit = new maps.Polyline({ map, path, strokeOpacity: 0, strokeWeight: 22, clickable: true, zIndex: 5 });
+        hit.addListener("click", event => { event.stop?.(); setPeekId(item.id); });
+        drawn.push(hit);
+      }
+      return drawn;
     });
+    routeLines.current = lines.filter(line => line.get("clickable") === false);
     stops.current = walk.stops.map((stop, index) => addMarker(context, {
       point: stop.point, label: `Stop ${index + 1}: ${stop.name}`, onClick: () => onSelect(index),
       className: "google-pin", text: String(index + 1), zIndex: 30,
@@ -123,9 +142,29 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
       for (const marker of stops.current) marker.map = null;
       stops.current = [];
     };
-  }, [context, walk, walks, onSelect]);
+  }, [context, walk, walks, onSelect, overview]);
 
-  // In-app directions: dotted walking legs, rides in their line's color, you and the destination.
+  // The tapped route stands out on top; the rest fade back.
+  useEffect(() => {
+    if (!context || !peek) return;
+    const { map, maps } = context;
+    const path = peek.path.map(mapPoint);
+    const lines = [
+      new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 11, clickable: false, zIndex: 6 }),
+      new maps.Polyline({ map, path, strokeColor: ROUTE, strokeWeight: 7, clickable: false, zIndex: 7 }),
+    ];
+    const pins = peek.stops.map((stop, index) => addMarker(context, {
+      point: stop.point, label: `Stop ${index + 1}: ${stop.name}`, className: "google-pin", text: String(index + 1), zIndex: 30,
+    }));
+    for (const line of routeLines.current) line.setOptions({ strokeOpacity: 0.3 });
+    return () => {
+      for (const line of lines) line.setMap(null);
+      for (const pin of pins) pin.map = null;
+      for (const line of routeLines.current) line.setOptions({ strokeOpacity: 1 });
+    };
+  }, [context, peek]);
+
+  // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
     if (!context || !directions) return;
     const { map, maps } = context;
@@ -136,6 +175,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
       if (segment.kind === "transit") {
         overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 11, clickable: false, zIndex: 2 }));
         overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 7, clickable: false, zIndex: 3 }));
+      } else if (segment.kind === "bike" || segment.kind === "drive") {
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 9, clickable: false, zIndex: 3 }));
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#4B33C9", strokeWeight: 5, clickable: false, zIndex: 4 }));
       } else {
         overlays.push(new maps.Polyline({
           map, path, strokeOpacity: 0, clickable: false, zIndex: 4,
@@ -173,8 +215,17 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     return () => { dot.map = null; };
   }, [context, location, following]);
 
-  return <section className="map google-map" aria-label="Interactive Boston map">
+  return <section className={`map google-map ${peek ? "peeking" : ""}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
+    {peek && <div className="route-peek" role="dialog" aria-label={peek.title}>
+      <button type="button" className="route-peek-main" onClick={() => onOpenWalk?.(peek.id)}>
+        <small>{[peek.category, peek.area].filter(Boolean).join(" · ")}</small>
+        <strong>{peek.title}</strong>
+        <span>{summary(peek)}</span>
+      </button>
+      <button type="button" className="route-peek-open" onClick={() => onOpenWalk?.(peek.id)}>Open<Icon name="arrow" size={15}/></button>
+      <button type="button" className="route-peek-close" aria-label="Close" onClick={() => setPeekId(null)}><Icon name="close" size={16}/></button>
+    </div>}
     <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       onClick={() => setTransit(value => !value)}>T lines</button>

@@ -9,7 +9,7 @@ import { Icon } from "./icons";
 import { RouteList } from "./route-list";
 import { RouteFilters } from "./route-filters";
 import { PlaceProfile } from "./place-profile";
-import { DirectionsPanel } from "./directions-panel";
+import { DirectionsPanel, TRAVEL_MODES } from "./directions-panel";
 import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
 import { ProfilePage, RankPrompt } from "./profile";
@@ -428,7 +428,7 @@ export default function Home() {
   return <main className="app">
     <div className="map-panel">
       <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={following ? location : null}
-        onPlaceClick={openPlace} directions={directionsMap}
+        onPlaceClick={openPlace} onOpenWalk={openWalk} directions={directionsMap}
         following={following} locationStatus={locationStatus} />
     </div>
 
@@ -467,13 +467,13 @@ export default function Home() {
                   <div className="to-start-heading">
                     <h3 id="to-start-title">Get to start</h3>
                     <div className="travel-modes" role="group" aria-label="Travel mode to the start">
-                      {["WALKING", "TRANSIT"].map(mode => <button key={mode} type="button"
-                        aria-pressed={toStartMode === mode} onClick={() => setToStartMode(mode)}>{mode === "WALKING" ? "Walk" : "Transit"}</button>)}
+                      {TRAVEL_MODES.map(([mode, label]) => <button key={mode} type="button"
+                        aria-pressed={toStartMode === mode} onClick={() => setToStartMode(mode)}>{label}</button>)}
                     </div>
                   </div>
                   <button className="catalog-button directions-start" type="button" disabled={!googleMapsConfigured}
                     onClick={() => openDirections({ name: walk.stops[0].name, point: walk.stops[0].point, placeId: walk.stops[0].placeId }, toStartMode)}>
-                    <Icon name={toStartMode === "TRANSIT" ? "train" : "walk"} size={16}/>Directions to {walk.stops[0].name}
+                    <Icon name={TRAVEL_MODES.find(([mode]) => mode === toStartMode)?.[2] ?? "walk"} size={16}/>Directions to {walk.stops[0].name}
                   </button>
                 </section>
 
