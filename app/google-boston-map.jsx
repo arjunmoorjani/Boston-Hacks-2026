@@ -223,7 +223,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     };
   }, [context, walk, walks, onSelect, activeWalkId]);
 
-  // In-app directions: dotted walking legs, rides in their line's color, you and the destination.
+  // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
     if (!context || !directions) return;
     const { map, maps } = context;
@@ -234,6 +234,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       if (segment.kind === "transit") {
         overlays.push(new maps.Polyline({ map, path, strokeColor: "#111111", strokeWeight: 12, clickable: false, zIndex: 2 }));
         overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 7, clickable: false, zIndex: 3 }));
+      } else if (segment.kind === "bike" || segment.kind === "drive") {
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 9, clickable: false, zIndex: 3 }));
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#4B33C9", strokeWeight: 5, clickable: false, zIndex: 4 }));
       } else {
         overlays.push(new maps.Polyline({
           map, path, strokeOpacity: 0, clickable: false, zIndex: 4,

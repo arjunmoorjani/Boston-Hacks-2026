@@ -19,6 +19,8 @@ const paths = {
   close: <path d="m6 6 12 12M18 6 6 18"/>,
   chevronDown: <path d="m6 9 6 6 6-6"/>,
   chevronUp: <path d="m6 15 6-6 6 6"/>,
+  bike: <><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9l3 7.5 3-7.5M8 6h3m4 0h2l-2 3"/></>,
+  car: <><path d="M5 16V11l2-5h10l2 5v5M3 11h18v5H3z"/><circle cx="7" cy="18.5" r="1.5"/><circle cx="17" cy="18.5" r="1.5"/></>,
   train: <><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 11h12M9 21l1.5-4M15 21l-1.5-4"/><circle cx="9.5" cy="14" r=".6"/><circle cx="14.5" cy="14" r=".6"/></>,
 };
 

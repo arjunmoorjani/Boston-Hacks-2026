@@ -1,6 +1,6 @@
 "use client";
 
-// In-app directions in the bottom sheet: from your location to a stop or place, walking or by T.
+// In-app directions in the bottom sheet: from your location to a stop or place, walking, by bike, by T or by car.
 // Summary (time, distance, arrival, fare), then a timeline of walk and ride segments. Tapping a
 // segment zooms the map to it.
 
@@ -8,14 +8,20 @@ import { useState } from "react";
 import { Icon } from "./icons";
 import { distanceLabel, minutesLabel, timeLabel } from "../lib/directions.mjs";
 
+export const TRAVEL_MODES = [["WALKING", "Walk", "walk"], ["BICYCLING", "Bike", "bike"], ["TRANSIT", "Transit", "train"], ["DRIVING", "Drive", "car"]];
+const GOOGLE_MODE = { WALKING: "walking", BICYCLING: "bicycling", TRANSIT: "transit", DRIVING: "driving" };
+const LOADING = { WALKING: "walking", BICYCLING: "bike", TRANSIT: "transit", DRIVING: "driving" };
+const SEGMENT = { walk: ["Walk", "walk"], bike: ["Bike", "bike"], drive: ["Drive", "car"] };
+
 function WalkSegment({ segment, last, target, focused, onFocus }) {
   const [open, setOpen] = useState(false);
   const to = segment.toStop ?? (last ? target : null);
-  return <li className={`dir-seg walk ${focused ? "focused" : ""}`}>
-    <span className="dir-rail" aria-hidden="true"><Icon name="walk" size={16}/></span>
+  const [verb, icon] = SEGMENT[segment.kind] ?? SEGMENT.walk;
+  return <li className={`dir-seg ${segment.kind} ${focused ? "focused" : ""}`}>
+    <span className="dir-rail" aria-hidden="true"><Icon name={icon} size={16}/></span>
     <div className="dir-seg-body">
       <button type="button" className="dir-seg-head" onClick={onFocus}>
-        <strong>Walk {minutesLabel(segment.minutes)}</strong>
+        <strong>{verb} {minutesLabel(segment.minutes)}</strong>
         <span>{distanceLabel(segment.meters)}{to ? ` to ${to}` : ""}</span>
       </button>
       {segment.steps.length > 0 && <button type="button" className="dir-steps-toggle" aria-expanded={open} onClick={() => setOpen(value => !value)}>
@@ -49,7 +55,7 @@ function TransitSegment({ segment, focused, onFocus }) {
 
 export function DirectionsPanel({ target, mode, onMode, state, focus, onFocus, onBack, onRetry }) {
   const { status, result, error } = state;
-  const googleMaps = `https://www.google.com/maps/dir/?api=1&destination=${target.point.join(",")}${target.placeId ? `&destination_place_id=${target.placeId}` : ""}&travelmode=${mode === "TRANSIT" ? "transit" : "walking"}`;
+  const googleMaps = `https://www.google.com/maps/dir/?api=1&destination=${target.point.join(",")}${target.placeId ? `&destination_place_id=${target.placeId}` : ""}&travelmode=${GOOGLE_MODE[mode] ?? "walking"}`;
 
   return <div className="directions-panel">
     <button type="button" className="back-link" onClick={onBack}><Icon name="arrowLeft" size={18}/>Back</button>
@@ -58,12 +64,12 @@ export function DirectionsPanel({ target, mode, onMode, state, focus, onFocus, o
     <p className="dir-from"><span className="dir-dot" aria-hidden="true"/>From your location</p>
 
     <div className="travel-modes dir-modes" role="group" aria-label="Travel mode">
-      {[["WALKING", "Walk", "walk"], ["TRANSIT", "Transit", "train"]].map(([value, label, icon]) => <button key={value} type="button"
+      {TRAVEL_MODES.map(([value, label, icon]) => <button key={value} type="button"
         aria-pressed={mode === value} onClick={() => onMode(value)}><Icon name={icon} size={16}/>{label}</button>)}
     </div>
 
     {status === "locating" && <p className="dir-status" role="status"><span className="spinner" aria-hidden="true"/>Finding your location…</p>}
-    {status === "loading" && <p className="dir-status" role="status"><span className="spinner" aria-hidden="true"/>Getting {mode === "TRANSIT" ? "transit" : "walking"} directions…</p>}
+    {status === "loading" && <p className="dir-status" role="status"><span className="spinner" aria-hidden="true"/>Getting {LOADING[mode] ?? "walking"} directions…</p>}
     {status === "error" && <div className="dir-error" role="alert">
       <p>{error}</p>
       <button type="button" className="catalog-button" onClick={onRetry}>Try again</button>
@@ -73,6 +79,8 @@ export function DirectionsPanel({ target, mode, onMode, state, focus, onFocus, o
       <div className="dir-summary">
         <strong>{minutesLabel(result.minutes)}</strong>
         <span>{distanceLabel(result.meters)} · arrive {timeLabel(result.arriveAt)}{result.fare ? ` · ${result.fare}` : ""}</span>
+        {mode === "BICYCLING" && <small className="dir-bike-note">Bluebikes docks are all over Boston and Cambridge.</small>}
+        {mode === "DRIVING" && <small className="dir-bike-note">Includes current traffic. Parking near many stops is tight; the T is often quicker.</small>}
         {focus != null && <button type="button" className="dir-show-all" onClick={() => onFocus(null)}>Show whole route</button>}
       </div>
       {result.warnings.length > 0 && <p className="route-warning">{result.warnings.join(" ")}</p>}
