@@ -13,6 +13,13 @@ const PRICE = {
   PRICE_LEVEL_EXPENSIVE: "$$$", PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
 };
 
+// One short reason for a suggested route: "3 people went here next", else "Open now", else the first reason.
+function reasonFor(route) {
+  const reasons = route.stops[0]?.reasons ?? [];
+  return reasons.find(reason => reason.includes("people")) ?? reasons.find(reason => reason === "Open now")
+    ?? reasons.find(reason => !reason.endsWith("min walk")) ?? "Nearby";
+}
+
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, directions, transitDirections,
   onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
@@ -20,11 +27,15 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
   const label = [theme, walk.area].filter(Boolean).join(" · ");
   const meta = [`${walk.stops.length} stops`, duration(walk.durationMin), costLabel(walk.cost), `${stats.miles} mi walk`].filter(Boolean).join(" · ");
 
-  // Suggest two-stop extensions using nearby stops from the route catalog.
+  // "Keep going": 2-stop extensions from the last stop, scored by lib/suggest (same logic as the main app):
+  // where people go next, distance, popularity, what fits (bakery after a museum, bars at night), open when you'd arrive.
   const last = walk.stops.at(-1);
   const keepGoing = useMemo(() => {
-    if (!last) return [];
-    return suggestRoutes(last.point, walk.stops.map(stop => stop.placeId), suggestData);
+    if (!suggestData?.places?.length || !last) return [];
+    return suggestRoutes({
+      lat: last.point[0], lng: last.point[1], afterPlaceId: last.placeId ?? null,
+      exclude: walk.stops.map(stop => stop.placeId).filter(Boolean), maxWalkMin: 15,
+    }, suggestData.places, suggestData.transitions, { length: 2, routes: 3 });
   }, [walk, last, suggestData]);
 
   const walking = step !== null;
@@ -70,14 +81,14 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
 
     {keepGoing.length > 0 && <section className="keep-going" aria-labelledby="keep-going-title">
       <h3 id="keep-going-title">Keep going after {last.name}</h3>
-      <p>Not done yet? Two more stops nearby, selected from nearby places in the walk catalog. Tap one to plan it.</p>
+      <p>Not done yet? Two more stops nearby, picked from where people go next and what’s open. Tap one to plan it.</p>
       <ul>
         {keepGoing.map(route => <li key={route.stops.map(stop => stop.placeId).join()}>
           <button type="button" onClick={() => onFork(route.stops)}>
             <span className="keep-going-path">{route.stops.map((stop, index) => <span key={stop.placeId}>
               {index > 0 && <Icon name="arrow" size={13}/>}{stop.name}
             </span>)}</span>
-            <small>+{route.walkMin} min walk estimated</small>
+            <small>+{route.walkMin} min walk · {reasonFor(route)}</small>
           </button>
         </li>)}
       </ul>

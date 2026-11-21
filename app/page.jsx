@@ -344,7 +344,8 @@ export default function Home() {
     });
     if (extra.length) {
       const last = walk.stops.at(-1);
-      startEditing([last, ...extra].map(asPlace), `After ${walk.title}`, `Continue from ${last.name}`);
+      const details = new Map(suggestData.places.map(place => [place.placeId, place]));
+      startEditing([last, ...extra.map(stop => ({ ...details.get(stop.placeId), ...stop }))].map(asPlace), `After ${walk.title}`, `Continue from ${last.name}`);
     } else {
       startEditing(walk.stops.map(asPlace), `${walk.title}, your version`, `Forking ${walk.title}`);
     }
