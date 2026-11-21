@@ -2,7 +2,7 @@
 
 // Profile ("You"): cover + identity, activity feed with route thumbnails, this month's walking,
 // trophy case, your ranked list ("Which plan was better?") and your saved plans.
-// Data lives in this browser (lib/profile-store.mjs).
+// Walk activity and rankings live in this browser.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
@@ -148,9 +148,13 @@ export function RankPrompt({ newId, ranking, titleOf, onDone }) {
 }
 
 // ---------- page ----------
-export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenWalk, onDeleteWalk, onSample, onReset }) {
+export function ProfilePage({ profile, walks, onClose, onRename, nameLoading, nameError, onSignOut, onExitGuest,
+  savingOuting, onRank, onOpenWalk, onDeleteWalk, onSample, onReset }) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
+  const [savingName, setSavingName] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [accountError, setAccountError] = useState("");
   const close = useRef(null);
   const { completions, ranking, customWalks } = profile;
 
@@ -190,11 +194,32 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
   const unranked = [...new Set(completions.map(c => c.walkId))].filter(id => !ranking.includes(id));
   const lineChips = LINES.filter(line => stats.lines.has(line.id));
 
-  function saveName() {
-    const name = draftName.trim().slice(0, 30) || "You";
-    onRename(name);
-    setDraftName(name);
-    setEditing(false);
+  async function saveName(event) {
+    event.preventDefault();
+    const name = draftName.trim();
+    if (savingName || (onSignOut && !name)) return;
+    setSavingName(true);
+    setAccountError("");
+    try {
+      await onRename(name);
+      setEditing(false);
+    } catch (error) {
+      setAccountError(error?.message || "Couldn’t save your display name.");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function signOut() {
+    setSigningOut(true);
+    setAccountError("");
+    try {
+      await onSignOut();
+    } catch (error) {
+      setAccountError(error?.message || "Couldn’t sign out. Try again.");
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return <div className="profile-page" role="dialog" aria-modal="true" aria-labelledby="profile-name">
@@ -206,14 +231,30 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
     <div className="profile-grid">
       <section className="profile-id">
         <div className="profile-avatar"><Avatar name={profile.name} size={104}/></div>
-        {editing
-          ? <form className="name-form" onSubmit={event => { event.preventDefault(); saveName(); }}>
-              <input autoFocus value={draftName} onChange={event => setDraftName(event.target.value)} onBlur={saveName} maxLength={30} aria-label="Your name"/>
-            </form>
-          : <h1 id="profile-name">{profile.name}
-              <button type="button" className="name-edit" onClick={() => { setDraftName(profile.name); setEditing(true); }} aria-label="Edit your name"><Icon name="pencil" size={15}/></button>
-            </h1>}
+        <div className="profile-name-heading">
+          <h1 id="profile-name">{profile.name}</h1>
+          {!editing && <button type="button" className="name-edit" disabled={nameLoading || signingOut}
+            onClick={() => { setDraftName(profile.name); setAccountError(""); setEditing(true); }} aria-label="Edit your name"><Icon name="pencil" size={15}/></button>}
+        </div>
+        {editing && <form className="name-form" onSubmit={saveName}>
+          <input autoFocus required={Boolean(onSignOut)} disabled={savingName || signingOut} value={draftName} onChange={event => setDraftName(event.target.value)}
+            maxLength={30} aria-label="Your name"/>
+          <div className="profile-account-actions">
+            <button type="submit" className="plan-primary" disabled={savingName || signingOut || (onSignOut && !draftName.trim())}>{savingName ? "Saving…" : "Save name"}</button>
+            <button type="button" className="plan-secondary" disabled={savingName}
+              onClick={() => { setAccountError(""); setEditing(false); }}>Cancel</button>
+          </div>
+        </form>}
+        {nameLoading && <p role="status">Loading your display name…</p>}
+        {(accountError || nameError) && <p className="editor-error" role="alert">{accountError || nameError}</p>}
         <p className="profile-where">Boston, MA</p>
+        <div className="profile-account-actions">
+          {onSignOut
+            ? <button type="button" className="plan-secondary" disabled={signingOut || savingName || savingOuting} onClick={signOut}>
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            : onExitGuest && <button type="button" className="plan-secondary" disabled={savingOuting} onClick={onExitGuest}>Exit guest mode</button>}
+        </div>
         <div className="profile-counts">
           <div><span>Plans done</span><strong>{stats.done}</strong></div>
           <div><span>Miles walked</span><strong>{stats.miles}</strong></div>

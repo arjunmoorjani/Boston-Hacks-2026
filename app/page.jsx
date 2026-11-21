@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MapIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { AuthGate } from "./auth-gate";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
@@ -27,7 +28,7 @@ import { saveOuting } from "../lib/save-outing.mjs";
 import { loadRoutes, routesForMap } from "../lib/routes.mjs";
 import { anyActive, applyFilters, categoryCounts, emptyFilters, matchesQuery } from "../lib/route-filters.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
-import { completionFor, emptyProfile, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
+import { completionFor, emptyProfile, guestDisplayName, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -37,6 +38,11 @@ const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.en
 const emptyWalk = { id: "no-route", title: "", area: "", category: "", description: "", stops: [], path: [] };
 
 export default function Home() {
+  return <AuthGate>{account => <Planner key={account.user?.id ?? "guest"} {...account}/>}</AuthGate>;
+}
+
+function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
+  const userId = user?.id;
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
   const [selectedWalkId, setSelectedWalkId] = useState(null);
@@ -49,6 +55,11 @@ export default function Home() {
   const [complete, setComplete] = useState(false);
   const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [accountName, setAccountName] = useState(null);
+  const [nameLoading, setNameLoading] = useState(Boolean(userId));
+  const [nameError, setNameError] = useState("");
+  const signupName = user?.user_metadata?.display_name;
+  const displayName = userId ? accountName || (typeof signupName === "string" && signupName.trim()) || "You" : guestDisplayName(profile.name);
   const [showProfile, setShowProfile] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [draftPlaces, setDraftPlaces] = useState([]);
@@ -217,13 +228,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setProfile(loadProfile()); // browser-only, so after the first render
+    const stored = loadProfile();
+    setProfile(guestName === null ? stored : { ...stored, name: guestName }); // browser-only, so after the first render
     setProfileLoaded(true);
-  }, []);
+  }, [guestName]);
   useEffect(() => {
     if (profileLoaded) saveProfile(profile);
   }, [profile, profileLoaded]);
   const updateProfile = change => setProfile(old => ({ ...old, ...(typeof change === "function" ? change(old) : change) }));
+
+  useEffect(() => {
+    if (!userId) return;
+    const controller = new AbortController();
+    async function loadName() {
+      try {
+        const { data, error } = await client.from("profiles").select("display_name")
+          .eq("id", userId).abortSignal(controller.signal).single();
+        if (error) throw error;
+        if (!controller.signal.aborted) setAccountName(data.display_name);
+      } catch {
+        if (!controller.signal.aborted) setNameError("Couldn’t load your account profile.");
+      } finally {
+        if (!controller.signal.aborted) setNameLoading(false);
+      }
+    }
+    loadName();
+    return () => controller.abort();
+  }, [client, userId]);
+
+  async function renameProfile(name) {
+    if (!userId) {
+      updateProfile({ name });
+      return;
+    }
+    const { data, error } = await client.from("profiles").update({ display_name: name })
+      .eq("id", userId).select("display_name").single();
+    if (error) throw error;
+    setAccountName(data.display_name);
+    setNameError("");
+  }
 
   // A leg's route is fetched once when it's needed (a mode other than walking, its steps, or following it),
   // then reused; transit routes are fetched again after a couple of minutes because departure times change.
@@ -669,8 +712,10 @@ export default function Home() {
         latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
         tags: { description: place.summary ?? "" },
       })}/>}
-    {showProfile && <ProfilePage profile={profile} walks={availableWalks} onClose={closeProfile}
-      onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
+    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={availableWalks} onClose={closeProfile}
+      onRename={renameProfile} nameLoading={nameLoading} nameError={nameError}
+      onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
+      onRank={ranking => updateProfile({ ranking })}
       onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
     {showLog && <LogPage onLog={logPreviousExcursion}/>}
