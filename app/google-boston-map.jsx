@@ -86,7 +86,7 @@ function PlaceDetails({ place, onClose, onAddPlace, addLabel }) {
   </dialog>;
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, location, locate, following, locationStatus, onAddPlace, draftPlaces, canAddPlace }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onAddPlace, draftPlaces, canAddPlace }) {
   const container = useRef(null);
   const stops = useRef([]);
   const [context, setContext] = useState(null);
@@ -208,19 +208,6 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, loc
 
   return <section className="map google-map" aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
-    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : walks.length ? `${walks.length} walks · Boston` : "Boston"}</div>
-    <div className="map-controls">
-      <div className="control-group">
-        <button aria-label="Zoom in" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() + 1)}><Icon name="plus"/></button>
-        <button aria-label="Zoom out" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() - 1)}><Icon name="minus"/></button>
-      </div>
-      <div className="control-group">
-        <button aria-label="Fit routes on map" disabled={!context || !walks.some(item => item.path.length)} onClick={() => fitWalks(context, walks)}><Icon name="fit"/></button>
-        <button aria-label={following ? "Stop location tracking" : "Show my location"}
-          title={following ? "Stop location tracking" : "Show my location"}
-          aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
-      </div>
-    </div>
     <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       onClick={() => setTransit(value => !value)}>T lines</button>

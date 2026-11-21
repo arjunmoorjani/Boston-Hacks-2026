@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MapIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
 import { RouteList } from "./route-list";
 import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
-import { ProfilePage, RankPrompt, Avatar } from "./profile";
+import { ProfilePage, RankPrompt } from "./profile";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildTripToStart, buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
@@ -44,7 +46,7 @@ export default function Home() {
   const [selectedWalkId, setSelectedWalkId] = useState(null);
   const [disabledCategories, setDisabledCategories] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(true);
   const [location, setLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [step, setStep] = useState(null);
@@ -205,9 +207,6 @@ export default function Home() {
     setSelected(null);
     setStep(null);
     setComplete(false);
-    setFollowing(false);
-    setLocation(null);
-    setLocationStatus("");
     setPendingToStart(null);
     setToStartRequest(null);
     setToStartEstimate(null);
@@ -218,6 +217,13 @@ export default function Home() {
   function changeRoute(id) {
     setSelectedWalkId(id);
     resetWalkInteraction();
+  }
+
+  function openMapScreen() {
+    setShowProfile(false);
+    setView("list");
+    changeRoute(null);
+    collapseSheet();
   }
 
   function toggleCategory(category) {
@@ -398,25 +404,8 @@ export default function Home() {
     <div className="map-panel">
       <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={setSelected} location={following ? location : null}
         draftPlaces={view === "edit" ? draftPlaces : []} onAddPlace={addPlace} canAddPlace={!building && !savingOuting && (view !== "edit" || draftPlaces.length < maxStops)}
-        following={following} locationStatus={locationStatus}
-        locate={() => {
-          if (following) {
-            setLocationStatus("");
-            setLocation(null);
-          }
-          setFollowing(!following);
-        }} />
+        following={following} locationStatus={locationStatus} />
     </div>
-
-    <header className="topbar">
-      <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
-      <div className="topbar-right">
-        <div className="city"><span/> BOSTON, MA</div>
-        <button type="button" className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Your profile">
-          <Avatar name={profile.name} size={34}/>
-        </button>
-      </div>
-    </header>
 
     {/* Phones: transparent space over the map; scrolling the page pulls the sheet up over it. */}
     <div className="sheet-spacer" aria-hidden="true"/>
@@ -496,5 +485,16 @@ export default function Home() {
       onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
       onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
+    <nav className="bottom-nav" aria-label="Primary navigation">
+      <button type="button" className="bottom-nav-button" aria-label="Map" aria-current={!showProfile ? "page" : undefined}
+        onClick={openMapScreen}>
+        <HugeiconsIcon icon={MapIcon} size={24}/>
+      </button>
+      <button type="button" className="bottom-nav-log" aria-label="Log, coming soon" title="Log coming soon" disabled/>
+      <button type="button" className="bottom-nav-button" aria-label="Profile" aria-current={showProfile ? "page" : undefined}
+        onClick={() => setShowProfile(true)}>
+        <HugeiconsIcon icon={UserIcon} size={24}/>
+      </button>
+    </nav>
   </main>;
 }

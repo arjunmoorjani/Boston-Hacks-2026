@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Icon } from "./icons";
 import { clamp, fitRoute, MAX_ZOOM, MIN_ZOOM, project, tileLayout, unproject } from "./map-math";
 
 const baseURL = "https://basemaps.cartocdn.com/rastertiles/voyager";
@@ -27,7 +26,7 @@ function Tile({ tile, onLoad, onFail }) {
   />;
 }
 
-export function BostonMap({ walk, walks, selected, onSelect, location, locate, following, locationStatus }) {
+export function BostonMap({ walk, walks, selected, onSelect, location, following, locationStatus }) {
   const element = useRef(null);
   const lastFit = useRef("");
   const pointers = useRef(new Map());
@@ -125,7 +124,6 @@ export function BostonMap({ walk, walks, selected, onSelect, location, locate, f
     return [x - left, y - top];
   };
   const routes = walks.map(item => item.path.map(screen).map(point => point.join(",")).join(" "));
-  const allPath = walks.flatMap(item => item.path);
   const gps = location && screen(location);
 
   return <section
@@ -157,17 +155,6 @@ export function BostonMap({ walk, walks, selected, onSelect, location, locate, f
         style={{ left: x, top: y }} onClick={() => onSelect(index)}
         aria-label={`Stop ${index + 1}: ${stop.name}`} aria-pressed={selected === index}>{index + 1}</button>;
     })}
-    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : walks.length ? `${walks.length} walks · Boston` : "Boston"}</div>
-    <div className="map-controls" data-map-ui>
-      <div className="control-group">
-        <button aria-label="Zoom in" onClick={() => setView(old => zoomAt(old, 1))}><Icon name="plus"/></button>
-        <button aria-label="Zoom out" onClick={() => setView(old => zoomAt(old, -1))}><Icon name="minus"/></button>
-      </div>
-      <div className="control-group">
-        <button aria-label="Fit routes on map" disabled={!allPath.length} onClick={() => setView(fitRoute(allPath, size))}><Icon name="fit"/></button>
-        <button aria-label="Show my location" aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
-      </div>
-    </div>
     {(!loadedTile && failedTile || locationStatus) && <div className="map-notice" role="status">{locationStatus || "Map tiles are unavailable. Check your internet connection."}</div>}
     <div className="map-key"><span/> Walking route</div>
     <div className="attribution" data-map-ui><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>{cartoKey && <> · <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">© CARTO</a></>}</div>
