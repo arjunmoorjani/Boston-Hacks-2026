@@ -206,10 +206,14 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
       </div>
       <div className="control-group">
         <button aria-label="Fit route on map" disabled={!context} onClick={() => fitWalk(context, walk)}><Icon name="fit"/></button>
-        <button aria-label="Show my location" aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
+        <button aria-label={following ? "Stop location tracking" : "Show my location"}
+          title={following ? "Stop location tracking" : "Show my location"}
+          aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
       </div>
     </div>
-    <button className="transit-toggle catalog-button" type="button" disabled={!context} aria-pressed={transit} onClick={() => setTransit(value => !value)}>T lines</button>
+    <button className="transit-toggle catalog-button" type="button" disabled={!context}
+      aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
+      onClick={() => setTransit(value => !value)}>T lines</button>
     {(mapError || !context || locationStatus || placeStatus) && <div className="map-notice" role="status">{mapError || locationStatus || placeStatus || "Loading Google Maps…"}</div>}
     {activePlace && <PlaceDetails key={activePlace.osm_id} place={activePlace} onClose={() => setActivePlace(null)}
       onAddPlace={onAddPlace} addLabel={draftPlaces.some(place => place.osm_id === activePlace.osm_id)

@@ -7,6 +7,7 @@ import { Icon } from "./icons";
 import { PlacesCatalog } from "./places-catalog";
 import { walks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
+import { watchUserLocation } from "../lib/location.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -40,18 +41,16 @@ export default function Home() {
       return;
     }
     setLocationStatus("Finding your location…");
-    const watch = navigator.geolocation.watchPosition(
-      ({ coords }) => {
-        setLocation([coords.latitude, coords.longitude]);
+    return watchUserLocation(navigator.geolocation, {
+      onLocation: nextLocation => {
+        setLocation(nextLocation);
         setLocationStatus("");
       },
-      error => {
-        setLocationStatus(error.code === 1 ? "Allow location access to see yourself on the map." : "Couldn’t get your location. Try again.");
+      onError: message => {
+        setLocationStatus(message);
         setFollowing(false);
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
-    );
-    return () => navigator.geolocation.clearWatch(watch);
+    });
   }, [following]);
 
   function changeRoute(index) {
