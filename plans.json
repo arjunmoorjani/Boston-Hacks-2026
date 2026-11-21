@@ -1,0 +1,3108 @@
+{
+  "version": 1,
+  "generated": "2026-11-20",
+  "note": "Seed plans from the Boston plans research. lat/lng/placeId are filled by scripts/enrich.ts; tStation is a starting guess that enrich.ts checks against the MBTA API.",
+  "plans": [
+    {
+      "slug": "cannoli-showdown",
+      "name": "Cannoli Showdown",
+      "neighborhood": "North End",
+      "stops": [
+        {
+          "name": "Mike's Pastry",
+          "note": "The classic ricotta cannoli in the white box",
+          "query": "Mike's Pastry, 300 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Modern Pastry",
+          "note": "Denser shell, the quality pick",
+          "query": "Modern Pastry, 257 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Bova's Bakery",
+          "note": "Ricotta-forward underdog, open 24 hours",
+          "query": "Bova's Bakery, 134 Salem St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Haymarket",
+      "tLines": [
+        "Orange",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 75,
+      "cost": "$",
+      "costNote": "About $18 for three",
+      "walkMi": 0.4,
+      "tags": [
+        "Under $40",
+        "With friends",
+        "Late night",
+        "Visiting family"
+      ],
+      "audience": [
+        "friends",
+        "visitors",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://dailyfreepress.com/09/13/09/198737/",
+        "https://oge.mit.edu/?p=21091",
+        "https://www.timeout.com/boston/restaurants/the-best-cannoli-in-boston-9-places-to-score-this-italian-treat"
+      ]
+    },
+    {
+      "slug": "market-to-harbor",
+      "name": "Market to Harbor",
+      "neighborhood": "Downtown Waterfront",
+      "stops": [
+        {
+          "name": "Boston Public Market",
+          "note": "New England vendors, grab lunch",
+          "query": "Boston Public Market, 100 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Rose Kennedy Greenway",
+          "note": "Walk the park toward the water",
+          "query": "Rose Kennedy Greenway, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Long Wharf",
+          "note": "Harbor views off the Harborwalk",
+          "query": "Long Wharf, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "New England Aquarium plaza",
+          "note": "Watch the harbor seals outside for free",
+          "query": "New England Aquarium, 1 Central Wharf, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Haymarket",
+      "tLines": [
+        "Orange",
+        "Green-D",
+        "Green-E",
+        "Blue"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": "Free unless you go inside the Aquarium",
+      "walkMi": 0.8,
+      "tags": [
+        "Rainy day",
+        "Visiting family",
+        "First week in Boston"
+      ],
+      "audience": [
+        "visitors",
+        "families"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.hotels.com/go/usa/indoor-activities-boston",
+        "https://www.fodors.com/community/united-states/boston-116341"
+      ]
+    },
+    {
+      "slug": "north-end-evening",
+      "name": "North End Evening",
+      "neighborhood": "North End",
+      "stops": [
+        {
+          "name": "Old North Church",
+          "note": "See the church and Paul Revere Mall",
+          "query": "Old North Church, 193 Salem St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Giacomo's",
+          "note": "Cash-only pasta classic, expect a line",
+          "query": "Giacomo's Ristorante, 355 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Modern Pastry",
+          "note": "Dessert to go",
+          "query": "Modern Pastry, 257 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Haymarket",
+      "tLines": [
+        "Orange",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "Evening",
+        "Date"
+      ],
+      "audience": [
+        "dates",
+        "visitors"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://wanderlog.com/view/qklhdrwmsq/3-days-in-boston",
+        "https://www.timeout.com/boston/restaurants/mikes-pastry"
+      ]
+    },
+    {
+      "slug": "freedom-trail-lite",
+      "name": "Freedom Trail Lite",
+      "neighborhood": "Downtown",
+      "stops": [
+        {
+          "name": "Boston Common",
+          "note": "Start where the trail starts",
+          "query": "Boston Common Visitor Information Center, 139 Tremont St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Granary Burying Ground",
+          "note": "Paul Revere and John Hancock are here",
+          "query": "Granary Burying Ground, Tremont St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Old State House",
+          "note": "Site of the Boston Massacre, outside",
+          "query": "Old State House, 206 Washington St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Faneuil Hall",
+          "note": "Browse the market hall",
+          "query": "Faneuil Hall, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        },
+        {
+          "name": "Bova's Bakery",
+          "note": "Reward yourself",
+          "query": "Bova's Bakery, 134 Salem St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 5
+        }
+      ],
+      "tStation": "Park Street",
+      "tLines": [
+        "Red",
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.2,
+      "tags": [
+        "Free",
+        "Visiting family",
+        "First week in Boston"
+      ],
+      "audience": [
+        "visitors",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://fodors.com/world/north-america/usa/massachusetts/boston/experiences/news/the-ultimate-4-day-boston-itinerary-for-first-time-visitors"
+      ]
+    },
+    {
+      "slug": "frog-pond-skate-and-cocoa",
+      "name": "Frog Pond Skate and Cocoa",
+      "neighborhood": "Boston Common",
+      "stops": [
+        {
+          "name": "Frog Pond",
+          "note": "Skate, then cocoa at the Pond Cottage",
+          "query": "Boston Common Frog Pond, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Charles Street",
+          "note": "Browse the shops",
+          "query": "Charles Street, Beacon Hill, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Beacon Hill Books & Cafe",
+          "note": "Warm up with a book",
+          "query": "Beacon Hill Books & Cafe, 71 Charles St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Park Street",
+      "tLines": [
+        "Red",
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": "About $12 entry plus $18 skate rental (2025-26 prices)",
+      "walkMi": 0.6,
+      "tags": [
+        "Winter",
+        "Date",
+        "With friends"
+      ],
+      "audience": [
+        "everyone"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": "2027-03-07",
+        "note": "Rink not open yet as of Nov 17, 2026; usually opens late November"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.bostoncentral.com/events/frog_pond_ice_skating/p1378.php",
+        "https://www.thebostoncalendar.com/events/ice-skating-on-the-frog-pond-at-boston-common",
+        "https://www.hercampus.com/school/emerson/10-upcoming-holiday-events-and-activities-in-boston-you-dont-want-to-miss/"
+      ]
+    },
+    {
+      "slug": "downtown-book-dig",
+      "name": "Downtown Book Dig",
+      "neighborhood": "Downtown Crossing",
+      "stops": [
+        {
+          "name": "Brattle Book Shop",
+          "note": "Dig through the outdoor discount lot",
+          "query": "Brattle Book Shop, 9 West St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Commonwealth Books",
+          "note": "Used and rare books",
+          "query": "Commonwealth Books, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Beacon Hill Books & Cafe",
+          "note": "End with tea upstairs",
+          "query": "Beacon Hill Books & Cafe, 71 Charles St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Downtown Crossing",
+      "tLines": [
+        "Red",
+        "Orange"
+      ],
+      "durationMin": 120,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.9,
+      "tags": [
+        "Solo",
+        "Rainy day",
+        "Study break"
+      ],
+      "audience": [
+        "solo",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.axios.com/local/boston/2026/07/06/boston-bookstore-bar-crawl-beacon-hill-harvard-square-jamaica-plain",
+        "https://jfidler.substack.com/p/a-book-lovers-bounty",
+        "https://www.bu.edu/articles/2021/best-independent-bookshops"
+      ]
+    },
+    {
+      "slug": "acorn-street-photo-walk",
+      "name": "Acorn Street Photo Walk",
+      "neighborhood": "Beacon Hill",
+      "stops": [
+        {
+          "name": "Charles Street",
+          "note": "Coffee and window shopping",
+          "query": "Charles Street, Beacon Hill, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Acorn Street",
+          "note": "The cobblestone photo",
+          "query": "Acorn Street, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Louisburg Square",
+          "note": "Quiet private square",
+          "query": "Louisburg Square, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Massachusetts State House",
+          "note": "The gold dome",
+          "query": "Massachusetts State House, 24 Beacon St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Charles/MGH",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 60,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 0.8,
+      "tags": [
+        "Free",
+        "First week in Boston",
+        "Visiting family"
+      ],
+      "audience": [
+        "visitors",
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://fodors.com/world/north-america/usa/massachusetts/boston/experiences/news/the-ultimate-4-day-boston-itinerary-for-first-time-visitors",
+        "https://wanderlog.com/view/qklhdrwmsq/3-days-in-boston"
+      ]
+    },
+    {
+      "slug": "esplanade-sunset-loop",
+      "name": "Esplanade Sunset Loop",
+      "neighborhood": "Esplanade",
+      "stops": [
+        {
+          "name": "Longfellow Bridge",
+          "note": "Skyline view from the bridge",
+          "query": "Longfellow Bridge, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Charles River Esplanade",
+          "note": "Walk the river path",
+          "query": "Charles River Esplanade, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Hatch Shell",
+          "note": "Stop at the bandshell",
+          "query": "Hatch Memorial Shell, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Public Garden",
+          "note": "Finish in the garden",
+          "query": "Boston Public Garden, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Charles/MGH",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 90,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 2.0,
+      "tags": [
+        "Free",
+        "Solo",
+        "Evening"
+      ],
+      "audience": [
+        "solo",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/comblog/2024/02/27/elaina-f-things-to-do-in-boston"
+      ]
+    },
+    {
+      "slug": "common-tree-lighting-night",
+      "name": "Common Tree Lighting Night",
+      "neighborhood": "Boston Common",
+      "stops": [
+        {
+          "name": "Boston Common tree lighting",
+          "note": "The official lighting",
+          "query": "Boston Common, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Downtown Boston Holiday Market",
+          "note": "Local makers, Thu to Sat",
+          "query": "10 Summer St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Omni Parker House",
+          "note": "Boston cream pie where it was invented",
+          "query": "Omni Parker House, 60 School St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Park Street",
+      "tLines": [
+        "Red",
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "Winter",
+        "Holiday",
+        "Evening"
+      ],
+      "audience": [
+        "everyone"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "Early December; date TBA (was Dec 3 in 2025). Market address may change."
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.hercampus.com/school/emerson/10-upcoming-holiday-events-and-activities-in-boston-you-dont-want-to-miss/",
+        "https://www.bostonartreview.com/read/2025-holiday-markets-calendar",
+        "https://www.timeout.com/boston/restaurants/best-boston-cream-pie"
+      ]
+    },
+    {
+      "slug": "first-week-in-boston",
+      "name": "First Week in Boston",
+      "neighborhood": "Boston Common / Back Bay",
+      "stops": [
+        {
+          "name": "Boston Common",
+          "note": "Get your bearings",
+          "query": "Boston Common, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Public Garden",
+          "note": "Make Way for Ducklings statues",
+          "query": "Boston Public Garden, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Newbury Street",
+          "note": "Walk the shops",
+          "query": "Newbury Street, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Trident Booksellers & Cafe",
+          "note": "Books and brunch",
+          "query": "Trident Booksellers & Cafe, 338 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Park Street",
+      "tLines": [
+        "Red",
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 180,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 1.5,
+      "tags": [
+        "First week in Boston",
+        "Under $40"
+      ],
+      "audience": [
+        "students",
+        "visitors"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/comblog/2024/02/27/elaina-f-things-to-do-in-boston",
+        "https://blogs.bu.edu/khcblog/2021/11/01/things-to-do-around-boston"
+      ]
+    },
+    {
+      "slug": "library-and-lit-crawl",
+      "name": "Library and Lit Crawl",
+      "neighborhood": "Back Bay",
+      "stops": [
+        {
+          "name": "Boston Public Library",
+          "note": "Bates Hall and the courtyard, free",
+          "query": "Boston Public Library Central Library, 700 Boylston St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Trident Booksellers & Cafe",
+          "note": "Books, brunch, trivia",
+          "query": "Trident Booksellers & Cafe, 338 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Bukowski Tavern",
+          "note": "Dim bar near Hynes, 21+",
+          "query": "Bukowski Tavern, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Copley",
+      "tLines": [
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.7,
+      "tags": [
+        "Rainy day",
+        "Study break",
+        "Evening"
+      ],
+      "audience": [
+        "students",
+        "solo",
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": "Last stop is 21+",
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.axios.com/local/boston/2026/07/06/boston-bookstore-bar-crawl-beacon-hill-harvard-square-jamaica-plain",
+        "https://www.bu.edu/articles/2021/best-independent-bookshops"
+      ]
+    },
+    {
+      "slug": "newbury-street-window-walk",
+      "name": "Newbury Street Window Walk",
+      "neighborhood": "Back Bay",
+      "stops": [
+        {
+          "name": "Public Garden",
+          "note": "Start at the garden gates",
+          "query": "Boston Public Garden, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Newbury Street galleries",
+          "note": "Boutiques and galleries",
+          "query": "Newbury Street, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Newbury Comics",
+          "note": "Records and pop culture",
+          "query": "Newbury Comics, 348 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Trident Booksellers & Cafe",
+          "note": "Coffee to finish",
+          "query": "Trident Booksellers & Cafe, 338 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Arlington",
+      "tLines": [
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.0,
+      "tags": [
+        "Free",
+        "With friends",
+        "Sunday"
+      ],
+      "audience": [
+        "friends",
+        "visitors"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://fodors.com/world/north-america/usa/massachusetts/boston/experiences/news/the-ultimate-4-day-boston-itinerary-for-first-time-visitors",
+        "https://wanderlog.com/view/qklhdrwmsq/3-days-in-boston"
+      ]
+    },
+    {
+      "slug": "comm-ave-mall-winter-lights",
+      "name": "Comm Ave Mall Winter Lights",
+      "neighborhood": "Back Bay",
+      "stops": [
+        {
+          "name": "Public Garden",
+          "note": "Start at the gates",
+          "query": "Boston Public Garden, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Commonwealth Avenue Mall",
+          "note": "Walk under the tree lights",
+          "query": "Commonwealth Avenue Mall, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Trident Booksellers & Cafe",
+          "note": "Hot drink at the end",
+          "query": "Trident Booksellers & Cafe, 338 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Arlington",
+      "tLines": [
+        "Green-B",
+        "Green-C",
+        "Green-D",
+        "Green-E"
+      ],
+      "durationMin": 90,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.0,
+      "tags": [
+        "Winter",
+        "Free",
+        "Evening",
+        "Date"
+      ],
+      "audience": [
+        "dates"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "Winter lights; confirm 2026 lighting date"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": []
+    },
+    {
+      "slug": "free-thursday-art-night",
+      "name": "Free Thursday Art Night",
+      "neighborhood": "Fenway",
+      "stops": [
+        {
+          "name": "Isabella Stewart Gardner Museum",
+          "note": "Free 5 to 9 pm, courtyard after dark",
+          "query": "Isabella Stewart Gardner Museum, 25 Evans Way, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Museum of Fine Arts",
+          "note": "Free with a BU ID",
+          "query": "Museum of Fine Arts, 465 Huntington Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Time Out Market",
+          "note": "Food hall dinner",
+          "query": "Time Out Market Boston, 401 Park Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Museum of Fine Arts",
+      "tLines": [
+        "Green-E"
+      ],
+      "durationMin": 180,
+      "cost": "free",
+      "costNote": "Free; food extra",
+      "walkMi": 1.2,
+      "tags": [
+        "Free",
+        "Evening",
+        "Date",
+        "Solo",
+        "Thursday"
+      ],
+      "audience": [
+        "students",
+        "dates",
+        "solo"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": "Gardner free tickets go live Tuesdays around 10 am and fill fast",
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.gardnermuseum.org/isabella-stewart-gardner-museum-announces-free-thursday-nights",
+        "https://www.axios.com/local/boston/2026/06/23/gardner-museum-boston-free-thursdays-admission",
+        "https://baystatebanner.com/2026/07/15/gardner-museum-launches-free-admission-every-thursday-after-5-p-m/"
+      ]
+    },
+    {
+      "slug": "rainy-fenway-museum-day",
+      "name": "Rainy Fenway Museum Day",
+      "neighborhood": "Fenway",
+      "stops": [
+        {
+          "name": "Museum of Fine Arts",
+          "note": "100+ galleries",
+          "query": "Museum of Fine Arts, 465 Huntington Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Isabella Stewart Gardner Museum",
+          "note": "The courtyard",
+          "query": "Isabella Stewart Gardner Museum, 25 Evans Way, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Time Out Market",
+          "note": "Late lunch",
+          "query": "Time Out Market Boston, 401 Park Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Museum of Fine Arts",
+      "tLines": [
+        "Green-E"
+      ],
+      "durationMin": 270,
+      "cost": "$$",
+      "costNote": "Student discounts at both museums",
+      "walkMi": 0.8,
+      "tags": [
+        "Rainy day",
+        "Visiting family"
+      ],
+      "audience": [
+        "families",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.hotels.com/go/usa/indoor-activities-boston",
+        "https://www.timeout.com/boston/things-to-do/best-indoor-activities-in-boston"
+      ]
+    },
+    {
+      "slug": "fens-and-gardens-walk",
+      "name": "Fens and Gardens Walk",
+      "neighborhood": "Fenway",
+      "stops": [
+        {
+          "name": "Fenway Victory Gardens",
+          "note": "Community garden plots",
+          "query": "Fenway Victory Gardens, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Kelleher Rose Garden",
+          "note": "Roses in season",
+          "query": "Kelleher Rose Garden, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Isabella Stewart Gardner Museum",
+          "note": "Free on Thursday nights",
+          "query": "Isabella Stewart Gardner Museum, 25 Evans Way, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Time Out Market",
+          "note": "Food hall",
+          "query": "Time Out Market Boston, 401 Park Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Fenway",
+      "tLines": [
+        "Green-D"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.3,
+      "tags": [
+        "Free",
+        "Solo",
+        "Sunday"
+      ],
+      "audience": [
+        "solo",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/comblog/2024/02/27/elaina-f-things-to-do-in-boston"
+      ]
+    },
+    {
+      "slug": "fenway-game-day",
+      "name": "Fenway Game Day",
+      "neighborhood": "Fenway",
+      "stops": [
+        {
+          "name": "Lansdowne Street",
+          "note": "Pregame",
+          "query": "Lansdowne St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Fenway Park",
+          "note": "Game in season, tours year-round",
+          "query": "Fenway Park, 4 Jersey St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Time Out Market",
+          "note": "Postgame food",
+          "query": "Time Out Market Boston, 401 Park Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Kenmore",
+      "tLines": [
+        "Green-B",
+        "Green-C",
+        "Green-D"
+      ],
+      "durationMin": 210,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "With friends",
+        "Evening"
+      ],
+      "audience": [
+        "friends",
+        "visitors"
+      ],
+      "status": "off_season",
+      "season": {
+        "start": "2027-04-01",
+        "end": "2027-09-30",
+        "note": "Games Apr to Sep; park tours run year-round"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/khcblog/2021/11/01/things-to-do-around-boston"
+      ]
+    },
+    {
+      "slug": "snowport-night",
+      "name": "Snowport Night",
+      "neighborhood": "Seaport",
+      "stops": [
+        {
+          "name": "Snowport Holiday Market",
+          "note": "130+ vendors, free entry",
+          "query": "Snowport, 100 Seaport Blvd, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Seaport Harborwalk",
+          "note": "Lights on the water",
+          "query": "Harborwalk, Seaport, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Institute of Contemporary Art",
+          "note": "Free on Thursday evenings",
+          "query": "Institute of Contemporary Art, 25 Harbor Shore Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Courthouse",
+      "tLines": [
+        "Silver",
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "free",
+      "costNote": "Free entry; optional $15 weekend fast pass",
+      "walkMi": 0.9,
+      "tags": [
+        "Winter",
+        "Holiday",
+        "Evening",
+        "With friends"
+      ],
+      "audience": [
+        "friends",
+        "dates"
+      ],
+      "status": "seasonal",
+      "season": {
+        "start": "2026-11-06",
+        "end": "2026-12-27",
+        "note": "Closed Nov 26 and Dec 25; Mon to Thu opens 3 pm until Dec 6"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.boston25news.com/news/local/snowport-holiday-market-returning-boston-seaport-2026-holiday-season/VOOAPT3EP5FXRI4SVYFRFDNRO4/",
+        "https://www.goboston.com/boston-stories/2026/10/28/snowport-holiday-market-2026-bostons-seaport-christmas-market-opens-november-6",
+        "https://caughtinsouthie.com/features/snowport-holiday-market-returns-november-6th-with-130-vendors-food-drinks-more/"
+      ]
+    },
+    {
+      "slug": "light-up-seaport",
+      "name": "Light Up Seaport",
+      "neighborhood": "Seaport",
+      "stops": [
+        {
+          "name": "Seaport tree lighting",
+          "note": "52-foot tree, 6 pm",
+          "query": "85 Northern Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Snowport Holiday Market",
+          "note": "Browse after",
+          "query": "Snowport, 100 Seaport Blvd, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Seaport Harborwalk",
+          "note": "Walk the water",
+          "query": "Harborwalk, Seaport, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Courthouse",
+      "tLines": [
+        "Silver",
+        "Red"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "Winter",
+        "Holiday",
+        "Free"
+      ],
+      "audience": [
+        "everyone"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": "2026-12-04",
+        "end": "2026-12-04",
+        "note": "Friday Dec 4, 2026, 6 pm"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://f1arcade.com/us/blog/guides/boston-snowport-winter-village",
+        "https://www.goboston.com/boston-stories/2026/10/28/snowport-holiday-market-2026-bostons-seaport-christmas-market-opens-november-6"
+      ]
+    },
+    {
+      "slug": "ica-free-thursday-and-fan-pier",
+      "name": "ICA Free Thursday and Fan Pier",
+      "neighborhood": "Seaport",
+      "stops": [
+        {
+          "name": "Institute of Contemporary Art",
+          "note": "Free Thursday evenings, harbor windows",
+          "query": "Institute of Contemporary Art, 25 Harbor Shore Dr, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Fan Pier Harborwalk",
+          "note": "Walk the pier",
+          "query": "Fan Pier Park, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Seaport dinner",
+          "note": "Pick a spot on Seaport Blvd",
+          "query": "Seaport Blvd, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Courthouse",
+      "tLines": [
+        "Silver",
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": "Museum free; dinner extra",
+      "walkMi": 0.6,
+      "tags": [
+        "Free",
+        "Evening",
+        "Date",
+        "Thursday"
+      ],
+      "audience": [
+        "dates",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.freemania.net/cities/boston-ma",
+        "https://mommypoppins.com/boston-kids/indoor-activities/free-admission-for-kids-at-boston-museums-and-attractions"
+      ]
+    },
+    {
+      "slug": "tea-party-to-snowport",
+      "name": "Tea Party to Snowport",
+      "neighborhood": "Fort Point",
+      "stops": [
+        {
+          "name": "Boston Tea Party Ships & Museum",
+          "note": "Throw the tea",
+          "query": "Boston Tea Party Ships & Museum, 306 Congress St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Fort Point Channel",
+          "note": "Walk the channel",
+          "query": "Fort Point Channel, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Snowport Holiday Market",
+          "note": "Seasonal market",
+          "query": "Snowport, 100 Seaport Blvd, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "South Station",
+      "tLines": [
+        "Red",
+        "Silver"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.8,
+      "tags": [
+        "Visiting family",
+        "Winter"
+      ],
+      "audience": [
+        "visitors",
+        "families"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://magazine.northeast.aaa.com/?p=27780",
+        "https://wanderlog.com/view/qklhdrwmsq/3-days-in-boston"
+      ]
+    },
+    {
+      "slug": "sowa-christmas-market-night",
+      "name": "SoWa Christmas Market Night",
+      "neighborhood": "South End",
+      "stops": [
+        {
+          "name": "SoWa Christmas Market",
+          "note": "125+ vendors, mulled wine",
+          "query": "SoWa Power Station, 550 Harrison Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Thayer Street galleries",
+          "note": "Open studios on First Fridays",
+          "query": "Thayer St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Flour Bakery",
+          "note": "Sticky bun to go",
+          "query": "Flour Bakery, South End, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Union Park St",
+      "tLines": [
+        "Silver"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": "$10 entry, kids 12 and under free",
+      "walkMi": 0.7,
+      "tags": [
+        "Rainy day",
+        "Winter",
+        "Holiday",
+        "Evening"
+      ],
+      "audience": [
+        "friends",
+        "dates"
+      ],
+      "status": "seasonal",
+      "season": {
+        "start": "2026-11-20",
+        "end": "2026-12-27",
+        "note": "Closed Mondays and Thanksgiving"
+      },
+      "reservation": null,
+      "notes": "About 15 min walk from Back Bay (Orange)",
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.thebostoncalendar.com/events/11th-annual-sowa-christmas-market-november-20-december-27",
+        "https://www.bu.edu/articles/2025/best-holiday-markets-boston"
+      ]
+    },
+    {
+      "slug": "sowa-first-friday",
+      "name": "SoWa First Friday",
+      "neighborhood": "South End",
+      "stops": [
+        {
+          "name": "SoWa Artists Guild",
+          "note": "Open artist studios",
+          "query": "SoWa Artists Guild, 450 Harrison Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Thayer Street galleries",
+          "note": "Gallery hop",
+          "query": "Thayer St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "South End dinner",
+          "note": "Tremont St restaurants",
+          "query": "Tremont St, South End, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Union Park St",
+      "tLines": [
+        "Silver"
+      ],
+      "durationMin": 150,
+      "cost": "free",
+      "costNote": "Free; dinner extra",
+      "walkMi": 0.5,
+      "tags": [
+        "Free",
+        "Evening",
+        "Art"
+      ],
+      "audience": [
+        "dates",
+        "friends"
+      ],
+      "status": "recurring",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "First Friday of each month, 5 to 9 pm"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.boston-discovery-guide.com/boston-winter-holiday-market.html"
+      ]
+    },
+    {
+      "slug": "chinatown-dessert-run",
+      "name": "Chinatown Dessert Run",
+      "neighborhood": "Chinatown",
+      "stops": [
+        {
+          "name": "Golden Crust Bakery",
+          "note": "Fresh fruit mochi",
+          "query": "Golden Crust Bakery, Chinatown, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Molly Tea",
+          "note": "Jasmine milk tea",
+          "query": "Molly Tea, Chinatown, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Omni Parker House",
+          "note": "Boston cream pie at the source",
+          "query": "Omni Parker House, 60 School St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Chinatown",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 90,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.6,
+      "tags": [
+        "Under $40",
+        "Rainy day",
+        "With friends"
+      ],
+      "audience": [
+        "friends",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.tiktok.com/@bostonfoodgram",
+        "https://www.timeout.com/boston/restaurants/best-boston-cream-pie"
+      ]
+    },
+    {
+      "slug": "chinatown-hot-pot-night",
+      "name": "Chinatown Hot Pot Night",
+      "neighborhood": "Chinatown",
+      "stops": [
+        {
+          "name": "Chinatown Gate",
+          "note": "Meet at the gate",
+          "query": "Chinatown Gate, Beach St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Liuyishou Hotpot",
+          "note": "Late-night all-you-can-eat hot pot",
+          "query": "Liuyishou Hotpot, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Chinatown bakery",
+          "note": "Egg tarts for the ride home",
+          "query": "Chinatown bakery, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Chinatown",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 120,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.4,
+      "tags": [
+        "Evening",
+        "Late night",
+        "With friends"
+      ],
+      "audience": [
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.tiktok.com/@foodiesof617"
+      ]
+    },
+    {
+      "slug": "downtown-crossing-rainy-afternoon",
+      "name": "Downtown Crossing Rainy Afternoon",
+      "neighborhood": "Downtown Crossing",
+      "stops": [
+        {
+          "name": "Brattle Book Shop",
+          "note": "Browse the shelves",
+          "query": "Brattle Book Shop, 9 West St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Boston Public Market",
+          "note": "Snacks from local vendors",
+          "query": "Boston Public Market, 100 Hanover St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Omni Parker House bar",
+          "note": "Warm up with a drink",
+          "query": "Omni Parker House, 60 School St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Downtown Crossing",
+      "tLines": [
+        "Red",
+        "Orange"
+      ],
+      "durationMin": 120,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.6,
+      "tags": [
+        "Rainy day",
+        "Winter"
+      ],
+      "audience": [
+        "dates",
+        "solo"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.axios.com/local/boston/2026/07/06/boston-bookstore-bar-crawl-beacon-hill-harvard-square-jamaica-plain",
+        "https://www.bostonartreview.com/read/2025-holiday-markets-calendar"
+      ]
+    },
+    {
+      "slug": "harvard-square-book-crawl",
+      "name": "Harvard Square Book Crawl",
+      "neighborhood": "Harvard Square",
+      "stops": [
+        {
+          "name": "Harvard Book Store",
+          "note": "New upstairs, used cellar downstairs",
+          "query": "Harvard Book Store, 1256 Massachusetts Ave, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Grolier Poetry Book Shop",
+          "note": "Tiny, 80+ years old",
+          "query": "Grolier Poetry Book Shop, 6 Plympton St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Raven Used Books",
+          "note": "15,000+ used titles",
+          "query": "Raven Used Books, 23 Church St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Mr. Bartley's",
+          "note": "Burger and a frappe",
+          "query": "Mr. Bartley's Burger Cottage, 1246 Massachusetts Ave, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Harvard",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.4,
+      "tags": [
+        "Rainy day",
+        "Study break",
+        "Under $40",
+        "Solo"
+      ],
+      "audience": [
+        "students",
+        "solo",
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": "Mr. Bartley's closes 4 pm Sun and Mon",
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.timeout.com/boston/shopping/best-bookstores-in-boston",
+        "https://www.thebostoncalendar.com/events/13-independent-bookstores-around-boston",
+        "https://www.thecultureist.com/2016/02/09/the-bookstore-tour-of-boston/"
+      ]
+    },
+    {
+      "slug": "harvard-museums-afternoon",
+      "name": "Harvard Museums Afternoon",
+      "neighborhood": "Harvard Square",
+      "stops": [
+        {
+          "name": "Harvard Art Museums",
+          "note": "Free admission",
+          "query": "Harvard Art Museums, 32 Quincy St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Harvard Museum of Natural History",
+          "note": "Glass flowers; free for MA residents at set times",
+          "query": "Harvard Museum of Natural History, 26 Oxford St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Harvard Square coffee",
+          "note": "Coffee to finish",
+          "query": "Harvard Square, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Harvard",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 180,
+      "cost": "free",
+      "costNote": "HMNH free to MA residents Sun 9-12 and Wed 3-5",
+      "walkMi": 0.5,
+      "tags": [
+        "Free",
+        "Rainy day",
+        "Sunday",
+        "Visiting family"
+      ],
+      "audience": [
+        "families",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.freemania.net/cities/boston-ma",
+        "https://b87fm.com/boston-museums-you-can-visit-for-free-or-almost-free/community-notes/108584/"
+      ]
+    },
+    {
+      "slug": "mount-auburn-cemetery-walk",
+      "name": "Mount Auburn Cemetery Walk",
+      "neighborhood": "Harvard Square",
+      "stops": [
+        {
+          "name": "Harvard Square coffee",
+          "note": "Grab a coffee",
+          "query": "Harvard Square, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Brattle Street",
+          "note": "Walk past the old houses",
+          "query": "Brattle St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Mount Auburn Cemetery",
+          "note": "Climb Washington Tower",
+          "query": "Mount Auburn Cemetery, 580 Mount Auburn St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Harvard",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 3.0,
+      "tags": [
+        "Free",
+        "Solo",
+        "Date"
+      ],
+      "audience": [
+        "solo",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.timeout.com/boston/things-to-do/best-boston-date-ideas"
+      ]
+    },
+    {
+      "slug": "riverbank-and-weeks-bridge",
+      "name": "Riverbank and Weeks Bridge",
+      "neighborhood": "Harvard Square",
+      "stops": [
+        {
+          "name": "Weeks Footbridge",
+          "note": "River and crew view",
+          "query": "John W. Weeks Footbridge, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Charles riverbank path",
+          "note": "Walk the river",
+          "query": "Memorial Drive, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Harvard Book Store",
+          "note": "Browse to finish",
+          "query": "Harvard Book Store, 1256 Massachusetts Ave, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Harvard",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 90,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.5,
+      "tags": [
+        "Free",
+        "Solo",
+        "Sunday"
+      ],
+      "audience": [
+        "solo",
+        "visitors"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://fodors.com/world/north-america/usa/massachusetts/boston/experiences/news/the-ultimate-4-day-boston-itinerary-for-first-time-visitors"
+      ]
+    },
+    {
+      "slug": "kendall-skate-night",
+      "name": "Kendall Skate Night",
+      "neighborhood": "Kendall",
+      "stops": [
+        {
+          "name": "Skate at Canal District Kendall",
+          "note": "Cheap student skating",
+          "query": "Skate @ Canal District Kendall, 300 Athenaeum St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "MIT List Visual Arts Center",
+          "note": "Free contemporary art",
+          "query": "MIT List Visual Arts Center, 20 Ames St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Kendall dinner",
+          "note": "Pick a spot in the square",
+          "query": "Kendall Square, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Kendall/MIT",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": "Adults $7, students $5, rentals $12",
+      "walkMi": 0.6,
+      "tags": [
+        "Winter",
+        "Under $40",
+        "Students"
+      ],
+      "audience": [
+        "students",
+        "friends"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "Usually opens mid-December; free ice show Dec 12-13, 2026"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.bostoncentral.com/ice-skating-in-boston",
+        "https://roamrecs.com/guide/best-ice-skating-rinks-boston-holidays"
+      ]
+    },
+    {
+      "slug": "thrift-and-kendall",
+      "name": "Thrift and Kendall",
+      "neighborhood": "Kendall",
+      "stops": [
+        {
+          "name": "Garment District",
+          "note": "Secondhand warehouse",
+          "query": "Garment District, 200 Broadway, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "MIT List Visual Arts Center",
+          "note": "Free gallery",
+          "query": "MIT List Visual Arts Center, 20 Ames St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Kendall food",
+          "note": "Grab a bite",
+          "query": "Kendall Square, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Kendall/MIT",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 120,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "Under $40",
+        "Rainy day",
+        "With friends"
+      ],
+      "audience": [
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.bu.edu/articles/2007/cheap-thrills-when-it-pays-to-be-a-student"
+      ]
+    },
+    {
+      "slug": "mit-corridor-and-smoot-bridge",
+      "name": "MIT Corridor and Smoot Bridge",
+      "neighborhood": "Kendall",
+      "stops": [
+        {
+          "name": "Killian Court",
+          "note": "The Great Dome",
+          "query": "Killian Court, MIT, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Infinite Corridor",
+          "note": "Walk the main hallway",
+          "query": "Infinite Corridor, MIT, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Harvard Bridge",
+          "note": "Count the Smoot marks",
+          "query": "Harvard Bridge, Massachusetts Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Charles River Esplanade",
+          "note": "End on the Boston side",
+          "query": "Charles River Esplanade, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Kendall/MIT",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 90,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.5,
+      "tags": [
+        "Free",
+        "Study break",
+        "First week in Boston"
+      ],
+      "audience": [
+        "students",
+        "visitors"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": []
+    },
+    {
+      "slug": "bow-market-night",
+      "name": "Bow Market Night",
+      "neighborhood": "Union Square, Somerville",
+      "stops": [
+        {
+          "name": "Bow Market",
+          "note": "30+ indie shops, fire pits in winter",
+          "query": "Bow Market, 1 Bow Market Way, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Remnant Brewing",
+          "note": "Beer in the courtyard",
+          "query": "Remnant Brewing, 2 Bow Market Way, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Union Square Donuts",
+          "note": "Dessert",
+          "query": "Union Square Donuts, 20 Bow St, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Union Square",
+      "tLines": [
+        "Green-D"
+      ],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.4,
+      "tags": [
+        "Evening",
+        "With friends",
+        "Winter",
+        "Date"
+      ],
+      "audience": [
+        "friends",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.tripadvisor.com/ShowTopic-g41818-i4765-k14402266-Bow_Market_worth_a_visit-Somerville_Massachusetts.html",
+        "https://www.meetboston.com/explore/neighborhoods/somerville/"
+      ]
+    },
+    {
+      "slug": "porter-to-davis-bookstroll",
+      "name": "Porter to Davis Bookstroll",
+      "neighborhood": "Somerville",
+      "stops": [
+        {
+          "name": "Porter Square Books",
+          "note": "Indie bookstore",
+          "query": "Porter Square Books, 25 White St, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Davis Square",
+          "note": "Walk up Mass Ave to Davis",
+          "query": "Davis Square, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Somerville Theatre",
+          "note": "Catch a movie",
+          "query": "Somerville Theatre, 55 Davis Sq, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Porter",
+      "tLines": [
+        "Red"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 1.0,
+      "tags": [
+        "Rainy day",
+        "Solo",
+        "Evening"
+      ],
+      "audience": [
+        "solo",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://www.bu.edu/articles/2021/best-independent-bookshops",
+        "https://jfidler.substack.com/p/a-book-lovers-bounty"
+      ]
+    },
+    {
+      "slug": "somerville-flea-holiday-market",
+      "name": "Somerville Flea Holiday Market",
+      "neighborhood": "Somerville",
+      "stops": [
+        {
+          "name": "Somerville Flea",
+          "note": "Holiday makers and vintage",
+          "query": "191 Highland Ave, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Davis Square lunch",
+          "note": "Lunch in the square",
+          "query": "Davis Square, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Somerville Community Path",
+          "note": "Walk it off",
+          "query": "Somerville Community Path, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Davis",
+      "tLines": [
+        "Red",
+        "Green-E"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 1.0,
+      "tags": [
+        "Winter",
+        "Holiday",
+        "Sunday"
+      ],
+      "audience": [
+        "friends"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "December Sundays; 2026 dates TBA"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.bostonartreview.com/read/2025-holiday-markets-calendar"
+      ]
+    },
+    {
+      "slug": "community-path-glx-walk",
+      "name": "Community Path GLX Walk",
+      "neighborhood": "Somerville",
+      "stops": [
+        {
+          "name": "Medford/Tufts",
+          "note": "Start at the end of the line",
+          "query": "Medford/Tufts station, Medford, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Ball Square cafes",
+          "note": "Coffee stop",
+          "query": "Ball Square, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Somerville Community Path",
+          "note": "Walk the new path",
+          "query": "Somerville Community Path, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Lechmere",
+          "note": "Finish by the river",
+          "query": "Lechmere station, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Medford/Tufts",
+      "tLines": [
+        "Green-E"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 2.5,
+      "tags": [
+        "Free",
+        "Solo",
+        "Sunday"
+      ],
+      "audience": [
+        "solo",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://en.wikipedia.org/wiki/Green_Line_Extension"
+      ]
+    },
+    {
+      "slug": "assembly-row-rainy-day",
+      "name": "Assembly Row Rainy Day",
+      "neighborhood": "Somerville",
+      "stops": [
+        {
+          "name": "LEGO Discovery Center",
+          "note": "Or the outlets",
+          "query": "LEGO Discovery Center Boston, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Assembly Square park",
+          "note": "River walk",
+          "query": "Assembly Square Park, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Assembly Row dinner",
+          "note": "Pick a spot",
+          "query": "Assembly Row, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Assembly",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 180,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.5,
+      "tags": [
+        "Rainy day",
+        "Visiting family"
+      ],
+      "audience": [
+        "families"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://lifetimemovingco.com/moving-to-somerville-ma-in-2025-a-locals-tell-all-guide/"
+      ]
+    },
+    {
+      "slug": "climb-day",
+      "name": "Climb Day",
+      "neighborhood": "Somerville",
+      "stops": [
+        {
+          "name": "Boston Bouldering Project Somerville",
+          "note": "Day pass plus shoes",
+          "query": "Boston Bouldering Project, Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Nearby brewery or cafe",
+          "note": "Refuel after",
+          "query": "Somerville, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        }
+      ],
+      "tStation": null,
+      "tLines": [],
+      "durationMin": 150,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": null,
+      "tags": [
+        "Rainy day",
+        "With friends",
+        "Winter"
+      ],
+      "audience": [
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": "Check nearest T stop once the gym location is confirmed",
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.timeout.com/boston/things-to-do/best-indoor-activities-in-boston",
+        "https://www.hotels.com/go/usa/indoor-activities-boston"
+      ]
+    },
+    {
+      "slug": "jp-perfect-day",
+      "name": "JP Perfect Day",
+      "neighborhood": "Jamaica Plain",
+      "stops": [
+        {
+          "name": "Chilacates",
+          "note": "Breakfast burrito",
+          "query": "Chilacates, 658 Centre St, Jamaica Plain, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Jamaica Pond",
+          "note": "Walk the 1.5-mile loop",
+          "query": "Jamaica Pond, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Arnold Arboretum",
+          "note": "281 acres, free",
+          "query": "Arnold Arboretum, 125 Arborway, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Tres Gatos",
+          "note": "Tapas, books, records",
+          "query": "Tres Gatos, 470 Centre St, Jamaica Plain, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Green Street",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 300,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 3.5,
+      "tags": [
+        "Sunday",
+        "Free",
+        "Visiting family",
+        "Date"
+      ],
+      "audience": [
+        "everyone"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://www.boston.com/community/neighborhoods/heres-how-to-spend-the-perfect-day-in-jamaica-plain/",
+        "https://bostoday.6amcity.com/jamaica-plain-guide-boston-ma"
+      ]
+    },
+    {
+      "slug": "arboretum-winter-walk",
+      "name": "Arboretum Winter Walk",
+      "neighborhood": "Jamaica Plain",
+      "stops": [
+        {
+          "name": "Forest Hills Gate",
+          "note": "Enter the Arboretum",
+          "query": "Arnold Arboretum Forest Hills Gate, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Peters Hill",
+          "note": "Skyline view",
+          "query": "Peters Hill, Arnold Arboretum, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Hunnewell Visitor Center",
+          "note": "Warm up and maps",
+          "query": "Hunnewell Visitor Center, 125 Arborway, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "Centre Street cafe",
+          "note": "Hot drink",
+          "query": "Centre St, Jamaica Plain, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "Forest Hills",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 120,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 2.5,
+      "tags": [
+        "Free",
+        "Winter",
+        "Solo"
+      ],
+      "audience": [
+        "solo",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://arboretum.harvard.edu/visit/directions-to-the-hunnewell-visitor-center/",
+        "https://www.lonelyplanet.com/articles/things-to-do-boston-winter"
+      ]
+    },
+    {
+      "slug": "brewery-and-centre-street",
+      "name": "Brewery and Centre Street",
+      "neighborhood": "Jamaica Plain",
+      "stops": [
+        {
+          "name": "Samuel Adams Boston Brewery",
+          "note": "Tour or taproom",
+          "query": "Samuel Adams Boston Brewery, 30 Germania St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Vee Vee",
+          "note": "Dinner on Centre St",
+          "query": "Vee Vee, Centre St, Jamaica Plain, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Tres Gatos",
+          "note": "Nightcap and records",
+          "query": "Tres Gatos, 470 Centre St, Jamaica Plain, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Stony Brook",
+      "tLines": [
+        "Orange"
+      ],
+      "durationMin": 180,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 1.0,
+      "tags": [
+        "Evening",
+        "With friends"
+      ],
+      "audience": [
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": "21+",
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.bostonartreview.com/read/2025-holiday-markets-calendar",
+        "https://bostoday.6amcity.com/jamaica-plain-guide-boston-ma"
+      ]
+    },
+    {
+      "slug": "eastie-skyline-loop",
+      "name": "Eastie Skyline Loop",
+      "neighborhood": "East Boston",
+      "stops": [
+        {
+          "name": "Piers Park",
+          "note": "Best straight-on skyline view",
+          "query": "Piers Park, 95 Marginal St, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "LoPresti Park",
+          "note": "Harborwalk",
+          "query": "LoPresti Park, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Santarpio's Pizza",
+          "note": "Boston pie since 1903, bring cash",
+          "query": "Santarpio's Pizza, 111 Chelsea St, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Maverick",
+      "tLines": [
+        "Blue"
+      ],
+      "durationMin": 150,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 1.8,
+      "tags": [
+        "Under $40",
+        "Evening",
+        "With friends",
+        "Date"
+      ],
+      "audience": [
+        "friends",
+        "dates"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": true,
+      "sources": [
+        "https://exploreboston.com/neighborhood/east-boston/",
+        "https://newenglandwithlove.com/things-to-do-in-east-boston/"
+      ]
+    },
+    {
+      "slug": "tall-ship-skate",
+      "name": "Tall Ship Skate",
+      "neighborhood": "East Boston",
+      "stops": [
+        {
+          "name": "The Rink at The Tall Ship",
+          "note": "Waterfront rink",
+          "query": "1 East Pier Dr, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Piers Park",
+          "note": "Skyline view",
+          "query": "Piers Park, 95 Marginal St, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Maverick Square taqueria",
+          "note": "Tacos after",
+          "query": "Maverick Square, East Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Maverick",
+      "tLines": [
+        "Blue"
+      ],
+      "durationMin": 120,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.8,
+      "tags": [
+        "Winter",
+        "Date"
+      ],
+      "audience": [
+        "dates",
+        "friends"
+      ],
+      "status": "coming_soon",
+      "season": {
+        "start": null,
+        "end": null,
+        "note": "2026-27 dates TBA"
+      },
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.bostoncentral.com/ice-skating-in-boston"
+      ]
+    },
+    {
+      "slug": "blue-line-to-the-beach",
+      "name": "Blue Line to the Beach",
+      "neighborhood": "Revere",
+      "stops": [
+        {
+          "name": "Revere Beach",
+          "note": "Winter walk on America's first public beach",
+          "query": "Revere Beach, Revere, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Kelly's Roast Beef",
+          "note": "The roast beef sandwich",
+          "query": "Kelly's Roast Beef, 410 Revere Beach Blvd, Revere, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        }
+      ],
+      "tStation": "Revere Beach",
+      "tLines": [
+        "Blue"
+      ],
+      "durationMin": 120,
+      "cost": "$",
+      "costNote": null,
+      "walkMi": 1.5,
+      "tags": [
+        "Under $40",
+        "Solo",
+        "Winter"
+      ],
+      "audience": [
+        "solo",
+        "friends"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://en.wikivoyage.org/wiki/Boston/East_Boston"
+      ]
+    },
+    {
+      "slug": "coolidge-corner-movie-night",
+      "name": "Coolidge Corner Movie Night",
+      "neighborhood": "Brookline",
+      "stops": [
+        {
+          "name": "Brookline Booksmith",
+          "note": "Used cellar and author talks",
+          "query": "Brookline Booksmith, 279 Harvard St, Brookline, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Coolidge Corner Theatre",
+          "note": "Indie and midnight movies",
+          "query": "Coolidge Corner Theatre, 290 Harvard St, Brookline, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Japonaise Bakery",
+          "note": "Japanese pastries",
+          "query": "Japonaise Bakery, Brookline, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Coolidge Corner",
+      "tLines": [
+        "Green-C"
+      ],
+      "durationMin": 180,
+      "cost": "$$",
+      "costNote": null,
+      "walkMi": 0.3,
+      "tags": [
+        "Rainy day",
+        "Evening",
+        "Date",
+        "Late night"
+      ],
+      "audience": [
+        "dates",
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": true,
+      "hero": false,
+      "sources": [
+        "https://www.timeout.com/boston/shopping/best-bookstores-in-boston",
+        "https://www.bu.edu/gso/files/2012/09/SurvivalSocial.pdf",
+        "https://www.tiktok.com/@foodiesof617"
+      ]
+    },
+    {
+      "slug": "bu-beach-to-smoot-bridge",
+      "name": "BU Beach to Smoot Bridge",
+      "neighborhood": "BU / Esplanade",
+      "stops": [
+        {
+          "name": "BU Beach",
+          "note": "River lawn",
+          "query": "BU Beach, Boston University, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Charles River Esplanade",
+          "note": "Walk east on the path",
+          "query": "Charles River Esplanade, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Harvard Bridge",
+          "note": "Smoot marks",
+          "query": "Harvard Bridge, Massachusetts Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        },
+        {
+          "name": "MIT side",
+          "note": "Look back at the skyline",
+          "query": "Memorial Drive, Cambridge, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 4
+        }
+      ],
+      "tStation": "BU East",
+      "tLines": [
+        "Green-B"
+      ],
+      "durationMin": 90,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 2.0,
+      "tags": [
+        "Free",
+        "Study break",
+        "Solo"
+      ],
+      "audience": [
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/comblog/2024/02/27/elaina-f-things-to-do-in-boston"
+      ]
+    },
+    {
+      "slug": "student-museum-afternoon",
+      "name": "Student Museum Afternoon",
+      "neighborhood": "Fenway",
+      "stops": [
+        {
+          "name": "Museum of Fine Arts",
+          "note": "Free with a BU ID",
+          "query": "Museum of Fine Arts, 465 Huntington Ave, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 1
+        },
+        {
+          "name": "Isabella Stewart Gardner Museum",
+          "note": "Free on Thursday nights",
+          "query": "Isabella Stewart Gardner Museum, 25 Evans Way, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 2
+        },
+        {
+          "name": "Trident Booksellers & Cafe",
+          "note": "Walk to Newbury for coffee",
+          "query": "Trident Booksellers & Cafe, 338 Newbury St, Boston, MA",
+          "lat": null,
+          "lng": null,
+          "placeId": null,
+          "order": 3
+        }
+      ],
+      "tStation": "Museum of Fine Arts",
+      "tLines": [
+        "Green-E"
+      ],
+      "durationMin": 180,
+      "cost": "free",
+      "costNote": null,
+      "walkMi": 1.5,
+      "tags": [
+        "Free",
+        "Study break",
+        "Students"
+      ],
+      "audience": [
+        "students"
+      ],
+      "status": "active",
+      "season": null,
+      "reservation": null,
+      "notes": null,
+      "needsVerify": false,
+      "hero": false,
+      "sources": [
+        "https://blogs.bu.edu/comblog/2024/02/27/elaina-f-things-to-do-in-boston",
+        "https://blogs.bu.edu/khcblog/2021/11/01/things-to-do-around-boston"
+      ]
+    }
+  ]
+}
