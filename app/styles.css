@@ -147,9 +147,10 @@ h2 { margin: 6px 0 13px; font-size: clamp(1.8rem, 3.1vw, 2.5rem); line-height: 1
 .place-dialog-heading { display: flex; justify-content: space-between; align-items: start; gap: 15px; }
 .place-dialog-heading h2 { font-size: 1.65rem; }
 .place-dialog-heading button { min-width: 44px; min-height: 44px; place-items: center; }
+.place-dialog-address { margin: -5px 0 14px; color: var(--muted); line-height: 1.4; }
 .place-dialog figure { margin: 0; }
 .place-dialog img { width: 100%; max-height: 270px; object-fit: cover; border-radius: 12px; }
-.place-dialog figcaption { font-size: .8rem; }
+.place-dialog figcaption, .place-attribution { margin-top: 5px; color: var(--muted); font-size: .8rem; }
 .place-dialog .primary { width: 100%; margin-top: 14px; }
 .draft-walk { margin-top: 12px; }
 .draft-walk h3 { margin: 0; }

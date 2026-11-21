@@ -88,7 +88,7 @@ export default function Home() {
     if (building || draftPlaces.length < 2) return;
     const stops = draftPlaces.map(place => ({
       id: place.osm_id, name: place.name, point: [Number(place.latitude), Number(place.longitude)],
-      address: [place.tags?.["addr:housenumber"], place.tags?.["addr:street"]].filter(Boolean).join(" "),
+      address: place.address || [place.tags?.["addr:housenumber"], place.tags?.["addr:street"]].filter(Boolean).join(" "),
       note: place.tags?.description || "A stop on your custom walk.",
     }));
     setBuilding(true);

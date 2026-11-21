@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { listPlaces, placesConfigured } from "../lib/places.mjs";
 import { Icon } from "./icons";
-
-const placesZoom = 16;
-const amenityIcons = { restaurant: "🍴", fast_food: "🍴", cafe: "☕", ice_cream: "🍦" };
-const categoryIcons = { food: "🍴", activities: "🎟️", sports: "⚽", shopping: "🛍️", culture: "🏛️" };
 
 function fitWalk({ map, maps }, walk) {
   const bounds = new maps.LatLngBounds();
@@ -31,6 +26,7 @@ function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, clas
 }
 
 function photoFor(place) {
+  if (place.photo) return place.photo;
   const source = place.tags?.photo_url || place.tags?.image;
   if (!source) return null;
 
@@ -60,12 +56,23 @@ function PlaceDetails({ place, onClose, onAddPlace, addLabel }) {
       <h2 id="map-place-name">{place.name}</h2>
       <form method="dialog"><button className="plain-button" aria-label="Close place"><Icon name="close"/></button></form>
     </div>
+    {place.address && <p className="place-dialog-address">{place.address}</p>}
     {photo && !failed
       ? <figure>
           <img src={photo.src} alt={place.name} onError={() => setFailed(true)} referrerPolicy="no-referrer"/>
-          {photo.credit && <figcaption><a href={photo.credit} target="_blank" rel="noreferrer">Photo credits</a></figcaption>}
+          {(photo.credit || photo.attributions?.length > 0) && <figcaption>
+            {photo.credit
+              ? <a href={photo.credit} target="_blank" rel="noreferrer">Photo credits</a>
+              : <>Photo by {photo.attributions.map((author, index) => <span key={`${author.displayName}-${index}`}>
+                  {index > 0 && ", "}
+                  {author.uri
+                    ? <a href={author.uri} target="_blank" rel="noreferrer">{author.displayName}</a>
+                    : author.displayName}
+                </span>)}</>}
+          </figcaption>}
         </figure>
       : <p>No photo available.</p>}
+    {place.attributions?.map((attribution, index) => <p className="place-attribution" key={`${attribution}-${index}`}>{attribution}</p>)}
     <button className="primary" type="button" disabled={addLabel !== "Add to walk"} onClick={() => {
       onAddPlace(place);
       dialog.current.close();
@@ -78,15 +85,14 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
   const stops = useRef([]);
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
-  const [bounds, setBounds] = useState(null);
-  const [places, setPlaces] = useState([]);
   const [activePlace, setActivePlace] = useState(null);
   const [mapError, setMapError] = useState("");
-  const [placesError, setPlacesError] = useState("");
+  const [placeStatus, setPlaceStatus] = useState("");
 
   useEffect(() => {
     let disposed = false;
-    let idleListener;
+    let poiClickListener;
+    let placeRequest = 0;
     const handleAuthFailure = () => setMapError("Google Maps couldn’t authenticate. Check the key and website restrictions.");
     window.addEventListener("sidewalk-google-auth-failure", handleAuthFailure);
 
@@ -98,10 +104,47 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
       const map = new Map(container.current, {
         center: { lat: 42.355, lng: -71.07 }, zoom: 14, mapId: googleMapId,
         disableDefaultUI: true, keyboardShortcuts: true, gestureHandling: "greedy",
-        clickableIcons: false, maxZoom: 20, minZoom: 3,
+        clickableIcons: true, maxZoom: 20, minZoom: 3,
       });
-      idleListener = map.addListener("idle", () => {
-        setBounds(map.getZoom() >= placesZoom ? map.getBounds()?.toJSON() : null);
+      poiClickListener = map.addListener("click", async event => {
+        if (!("placeId" in event) || !event.placeId) return;
+        event.stop();
+        const request = ++placeRequest;
+        setActivePlace(null);
+        setPlaceStatus("Loading place…");
+
+        try {
+          const { Place } = await maps.importLibrary("places");
+          const place = new Place({ id: event.placeId });
+          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "photos"] });
+          if (disposed || request !== placeRequest) return;
+
+          const photo = place.photos?.[0];
+          const point = place.location ? [place.location.lat(), place.location.lng()] : null;
+          setActivePlace({
+            source: "google",
+            osm_id: `google:${event.placeId}`,
+            placeId: event.placeId,
+            name: place.displayName || "Google Maps place",
+            address: place.formattedAddress || "",
+            latitude: point?.[0],
+            longitude: point?.[1],
+            attributions: place.attributions || [],
+            photo: photo ? {
+              src: photo.getURI({ maxWidth: 800, maxHeight: 600 }),
+              attributions: photo.authorAttributions.map(author => ({
+                displayName: author.displayName || "Google Maps contributor",
+                uri: author.uri || "",
+              })),
+            } : null,
+            tags: { description: "A place discovered on Google Maps." },
+          });
+          setPlaceStatus("");
+        } catch {
+          if (!disposed && request === placeRequest) {
+            setPlaceStatus("Couldn’t load this place. Check that Places API (New) is enabled.");
+          }
+        }
       });
       setContext({ map, maps, AdvancedMarkerElement });
     }).catch(() => {
@@ -110,7 +153,8 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
 
     return () => {
       disposed = true;
-      idleListener?.remove();
+      placeRequest += 1;
+      poiClickListener?.remove();
       window.removeEventListener("sidewalk-google-auth-failure", handleAuthFailure);
     };
   }, []);
@@ -152,37 +196,6 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
     return () => { dot.map = null; };
   }, [context, location, following]);
 
-  useEffect(() => {
-    setPlacesError("");
-    setPlaces([]);
-    if (!placesConfigured || !bounds) return;
-    const controller = new AbortController();
-    listPlaces({ bounds, signal: controller.signal }).then(result => {
-      if (!controller.signal.aborted) setPlaces(result.places);
-    }).catch(error => {
-      if (!controller.signal.aborted) {
-        setPlaces([]);
-        setPlacesError(error.message);
-      }
-    });
-    return () => controller.abort();
-  }, [bounds]);
-
-  useEffect(() => {
-    if (!context || !bounds) return;
-    const markers = places.flatMap(place => {
-      if (place.latitude == null || place.longitude == null) return [];
-      const point = [Number(place.latitude), Number(place.longitude)];
-      if (!point.every(Number.isFinite)) return [];
-      return addMarker(context, {
-        point, label: place.name, onClick: () => setActivePlace(place), className: "google-pin place-pin",
-        text: amenityIcons[place.tags?.amenity] || categoryIcons[place.categories?.[0]] || "•",
-        zIndex: 10, collisionBehavior: "OPTIONAL_AND_HIDES_LOWER_PRIORITY",
-      });
-    });
-    return () => { for (const marker of markers) marker.map = null; };
-  }, [context, bounds, places]);
-
   return <section className="map google-map" aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
     <div className="map-label"><span className="map-label-dot"/> {walk.area}, Boston</div>
@@ -197,7 +210,7 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
       </div>
     </div>
     <button className="transit-toggle catalog-button" type="button" disabled={!context} aria-pressed={transit} onClick={() => setTransit(value => !value)}>T lines</button>
-    {(mapError || !context || locationStatus || placesError) && <div className="map-notice" role="status">{mapError || locationStatus || placesError || "Loading Google Maps…"}</div>}
+    {(mapError || !context || locationStatus || placeStatus) && <div className="map-notice" role="status">{mapError || locationStatus || placeStatus || "Loading Google Maps…"}</div>}
     {activePlace && <PlaceDetails key={activePlace.osm_id} place={activePlace} onClose={() => setActivePlace(null)}
       onAddPlace={onAddPlace} addLabel={draftPlaces.some(place => place.osm_id === activePlace.osm_id)
         ? "Already in your walk" : canAddPlace ? "Add to walk" : "Walk list unavailable"} />}
