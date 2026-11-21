@@ -428,6 +428,7 @@ export default function Home() {
   return <main className="app">
     <div className="map-panel">
       <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={following ? location : null}
+        activeWalkId={view === "detail" ? selectedWalkId : null} onOpenWalk={openWalk}
         onPlaceClick={openPlace} directions={directionsMap}
         following={following} locationStatus={locationStatus} />
     </div>

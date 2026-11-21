@@ -7,6 +7,8 @@ const baseURL = "https://basemaps.cartocdn.com/rastertiles/voyager";
 const osmURL = "https://tile.openstreetmap.org";
 const cartoKey = process.env.NEXT_PUBLIC_CARTO_BASEMAP_KEY?.trim();
 const bostonCenter = [42.355, -71.07];
+const routePurple = "#5839b5";
+const routePurpleLight = "#aa9cdd";
 
 function Tile({ tile, onLoad, onFail }) {
   const [fallback, setFallback] = useState(!cartoKey);
@@ -26,9 +28,11 @@ function Tile({ tile, onLoad, onFail }) {
   />;
 }
 
-export function BostonMap({ walk, walks, selected, onSelect, location, following, locationStatus }) {
+export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, location, following, locationStatus }) {
   const element = useRef(null);
   const lastFit = useRef("");
+  const browseView = useRef(null);
+  const previousActiveWalk = useRef(activeWalkId);
   const pointers = useRef(new Map());
   const moved = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -57,6 +61,16 @@ export function BostonMap({ walk, walks, selected, onSelect, location, following
   useEffect(() => {
     if (following && location) setView(old => ({ ...old, center: location }));
   }, [location, following]);
+
+  useEffect(() => {
+    const wasActive = previousActiveWalk.current;
+    if (!wasActive && activeWalkId) browseView.current = view;
+    if (wasActive && !activeWalkId && browseView.current) {
+      setView(browseView.current);
+      browseView.current = null;
+    }
+    previousActiveWalk.current = activeWalkId;
+  }, [activeWalkId]);
 
   function zoomAt(old, change, anchorX = 0, anchorY = 0, panX = 0, panY = 0) {
     const zoom = clamp(old.zoom + change, MIN_ZOOM, MAX_ZOOM);
@@ -142,10 +156,17 @@ export function BostonMap({ walk, walks, selected, onSelect, location, following
       {tiles.map(tile => <Tile key={tile.key} tile={tile} onLoad={() => setLoadedTile(true)} onFail={() => setFailedTile(true)} />)}
     </div>
     <svg className="route-layer" width="100%" height="100%" aria-hidden="true">
-      {routes.map((route, index) => <g key={walks[index].id}>
-        <polyline points={route} fill="none" stroke="#fff" strokeWidth={walk.path.length ? 10 : 7} strokeLinejoin="round" strokeLinecap="round"/>
-        <polyline points={route} fill="none" stroke="#5839b5" strokeWidth={walk.path.length ? 6 : 4} strokeLinejoin="round" strokeLinecap="round"/>
-      </g>)}
+      {routes.map((route, index) => {
+        const active = walks[index].id === activeWalkId;
+        return <g key={walks[index].id}>
+          <polyline points={route} fill="none" stroke="#111" strokeOpacity={active ? 1 : .14}
+            strokeWidth={walk.path.length ? 12 : 8} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline points={route} fill="none" stroke={active ? routePurple : routePurpleLight}
+            strokeOpacity={active ? 1 : .58} strokeWidth={walk.path.length ? 7 : 4} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline className="route-hit" data-map-ui points={route} fill="none" stroke="transparent" strokeWidth="24"
+            onClick={() => onOpenWalk?.(walks[index].id)}/>
+        </g>;
+      })}
     </svg>
     {gps && <span className="gps" style={{ left: gps[0], top: gps[1] }} title="Your location" />}
     {walk.stops.map((stop, index) => {

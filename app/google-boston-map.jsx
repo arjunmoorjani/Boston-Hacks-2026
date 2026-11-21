@@ -1,7 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MetroIcon } from "@hugeicons/core-free-icons";
 import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
+import mbtaLines from "./data/mbta-lines.json";
+
+const routePurple = "#5839b5";
+const routePurpleLight = "#aa9cdd";
+
+function lineScale(zoom = 14) {
+  const normalized = Math.max(0, Math.min(1, (zoom - 10) / 5));
+  return normalized ** 2;
+}
+
+function tLineWeights(zoom = 14) {
+  const closeUp = lineScale(zoom);
+  return { outline: 4 + (10 * closeUp), color: 2 + (6 * closeUp) };
+}
+
+function walkLineWeights(zoom = 14) {
+  const closeUp = lineScale(zoom);
+  return { outline: 3.5 + (8.5 * closeUp), color: 2 + (5 * closeUp) };
+}
 
 function fitWalks({ map, maps }, walks) {
   const visible = walks.filter(walk => walk?.path?.length);
@@ -52,14 +73,18 @@ function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, clas
   return marker;
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onPlaceClick, directions }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, location, following, locationStatus, onPlaceClick, directions }) {
   const container = useRef(null);
   const stops = useRef([]);
+  const browseView = useRef(null);
+  const previousActiveWalk = useRef(activeWalkId);
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
   const [mapError, setMapError] = useState("");
   const placeClick = useRef(onPlaceClick);
   placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
+  const walkClick = useRef(onOpenWalk);
+  walkClick.current = onOpenWalk;
 
   useEffect(() => {
     let disposed = false;
@@ -99,31 +124,104 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     if (!context) return;
     const layer = new context.maps.TransitLayer();
     layer.setMap(transit ? context.map : null);
-    return () => layer.setMap(null);
+    const overlays = transit ? mbtaLines.lines.map(line => {
+      const path = line.path.map(mapPoint);
+      return {
+        outline: new context.maps.Polyline({
+          map: context.map, path, strokeColor: "#111111", strokeOpacity: .96,
+          clickable: false, zIndex: 12,
+        }),
+        color: new context.maps.Polyline({
+          map: context.map, path, strokeColor: line.color, strokeOpacity: 1,
+          clickable: false, zIndex: 13,
+        }),
+      };
+    }) : [];
+    const resizeLines = () => {
+      const weights = tLineWeights(context.map.getZoom());
+      for (const overlay of overlays) {
+        overlay.outline.setOptions({ strokeWeight: weights.outline });
+        overlay.color.setOptions({ strokeWeight: weights.color });
+      }
+    };
+    resizeLines();
+    const zoomListener = context.map.addListener("zoom_changed", resizeLines);
+    return () => {
+      layer.setMap(null);
+      zoomListener.remove();
+      for (const overlay of overlays) {
+        overlay.outline.setMap(null);
+        overlay.color.setMap(null);
+      }
+    };
   }, [context, transit]);
 
   useEffect(() => {
     if (!context) return;
     const { map, maps } = context;
+    const wasActive = previousActiveWalk.current;
+    const enteringWalk = !wasActive && Boolean(activeWalkId);
+    const leavingWalk = Boolean(wasActive) && !activeWalkId;
+    if (enteringWalk) {
+      const center = map.getCenter();
+      browseView.current = center ? { center: center.toJSON(), zoom: map.getZoom() } : null;
+    }
     const lines = walks.flatMap(item => {
       const path = item.path.map(mapPoint);
       if (!path.length) return [];
-      return [
-        new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: walk.path.length ? 10 : 7, clickable: false }),
-        new maps.Polyline({ map, path, strokeColor: "#5839b5", strokeWeight: walk.path.length ? 6 : 4, clickable: false, zIndex: 1 }),
-      ];
+      const active = item.id === activeWalkId;
+      const hit = new maps.Polyline({
+        map, path, strokeColor: "#000000", strokeOpacity: .01, strokeWeight: 24,
+        clickable: true, cursor: "pointer", zIndex: active ? 24 : 8,
+      });
+      const clickListener = hit.addListener("click", () => walkClick.current?.(item.id));
+      return [{
+        active,
+        outline: new maps.Polyline({
+          map, path, strokeColor: "#111111", strokeOpacity: active ? 1 : .14,
+          clickable: false, zIndex: active ? 20 : 4,
+        }),
+        color: new maps.Polyline({
+          map, path, strokeColor: active ? routePurple : routePurpleLight,
+          strokeOpacity: active ? 1 : .58, clickable: false, zIndex: active ? 21 : 5,
+        }),
+        hit,
+        clickListener,
+      }];
     });
+    const resizeLines = () => {
+      const weights = walkLineWeights(map.getZoom());
+      for (const line of lines) {
+        line.outline.setOptions({ strokeWeight: weights.outline });
+        line.color.setOptions({ strokeWeight: weights.color });
+      }
+    };
+    resizeLines();
+    const zoomListener = map.addListener("zoom_changed", resizeLines);
     stops.current = walk.stops.map((stop, index) => addMarker(context, {
       point: stop.point, label: `Stop ${index + 1}: ${stop.name}`, onClick: () => onSelect(index),
       className: "google-pin", text: String(index + 1), zIndex: 30,
     }));
-    fitWalks(context, walks);
+    if (leavingWalk && browseView.current) {
+      map.setCenter(browseView.current.center);
+      map.setZoom(browseView.current.zoom);
+      browseView.current = null;
+    } else {
+      fitWalks(context, walks);
+    }
+    previousActiveWalk.current = activeWalkId;
     return () => {
-      for (const line of lines) line.setMap(null);
+      zoomListener.remove();
+      for (const line of lines) {
+        line.outline.setMap(null);
+        line.color.setMap(null);
+        line.hit.setMap(null);
+        line.clickListener.remove();
+      }
       for (const marker of stops.current) marker.map = null;
       stops.current = [];
     };
-  }, [context, walk, walks, onSelect]);
+  }, [context, walk, walks, onSelect, activeWalkId]);
 
   // In-app directions: dotted walking legs, rides in their line's color, you and the destination.
   useEffect(() => {
@@ -134,12 +232,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
       const path = segment.path.map(mapPoint);
       if (path.length < 2) continue;
       if (segment.kind === "transit") {
-        overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 11, clickable: false, zIndex: 2 }));
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#111111", strokeWeight: 12, clickable: false, zIndex: 2 }));
         overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 7, clickable: false, zIndex: 3 }));
       } else {
         overlays.push(new maps.Polyline({
           map, path, strokeOpacity: 0, clickable: false, zIndex: 4,
-          icons: [{ icon: { path: maps.SymbolPath.CIRCLE, scale: 3.2, fillColor: "#4B33C9", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 1.5 }, offset: "0", repeat: "11px" }],
+          icons: [{ icon: { path: maps.SymbolPath.CIRCLE, scale: 3.4, fillColor: "#269ad5", fillOpacity: 1, strokeColor: "#111111", strokeWeight: 2 }, offset: "0", repeat: "12px" }],
         }));
       }
     }
@@ -177,7 +275,10 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     <div className="google-map-canvas" ref={container}/>
     <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
-      onClick={() => setTransit(value => !value)}>T lines</button>
+      title={transit ? "Hide T lines" : "Show T lines"}
+      onClick={() => setTransit(value => !value)}>
+      <HugeiconsIcon icon={MetroIcon} aria-hidden="true" />
+    </button>
     {(mapError || !context || locationStatus) && <div className="map-notice" role="status">{mapError || locationStatus || "Loading Google Maps…"}</div>}
   </section>;
 }
