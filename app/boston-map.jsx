@@ -7,6 +7,7 @@ import { clamp, fitRoute, MAX_ZOOM, MIN_ZOOM, project, tileLayout, unproject } f
 const baseURL = "https://basemaps.cartocdn.com/rastertiles/voyager";
 const osmURL = "https://tile.openstreetmap.org";
 const cartoKey = process.env.NEXT_PUBLIC_CARTO_BASEMAP_KEY?.trim();
+const bostonCenter = [42.355, -71.07];
 
 function Tile({ tile, onLoad, onFail }) {
   const [fallback, setFallback] = useState(!cartoKey);
@@ -32,7 +33,7 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
   const pointers = useRef(new Map());
   const moved = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [view, setView] = useState({ center: walk.stops[0].point, zoom: 15 });
+  const [view, setView] = useState({ center: walk.stops[0]?.point ?? bostonCenter, zoom: 15 });
   const [loadedTile, setLoadedTile] = useState(false);
   const [failedTile, setFailedTile] = useState(false);
 
@@ -46,7 +47,7 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
   }, []);
 
   useEffect(() => {
-    if (size.width && lastFit.current !== walk.id) {
+    if (size.width && walk.path.length && lastFit.current !== walk.id) {
       lastFit.current = walk.id;
       setView(fitRoute(walk.path, size));
     }
@@ -151,14 +152,14 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
         style={{ left: x, top: y }} onClick={() => onSelect(index)}
         aria-label={`Stop ${index + 1}: ${stop.name}`} aria-pressed={selected === index}>{index + 1}</button>;
     })}
-    <div className="map-label"><span className="map-label-dot"/> {walk.area}, Boston</div>
+    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : "Boston"}</div>
     <div className="map-controls" data-map-ui>
       <div className="control-group">
         <button aria-label="Zoom in" onClick={() => setView(old => zoomAt(old, 1))}><Icon name="plus"/></button>
         <button aria-label="Zoom out" onClick={() => setView(old => zoomAt(old, -1))}><Icon name="minus"/></button>
       </div>
       <div className="control-group">
-        <button aria-label="Fit route on map" onClick={() => setView(fitRoute(walk.path, size))}><Icon name="fit"/></button>
+        <button aria-label="Fit route on map" disabled={!walk.path.length} onClick={() => setView(fitRoute(walk.path, size))}><Icon name="fit"/></button>
         <button aria-label="Show my location" aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { Icon } from "./icons";
 
 function fitWalk({ map, maps }, walk) {
+  if (!walk?.path?.length) return;
   const bounds = new maps.LatLngBounds();
   for (const point of walk.path) bounds.extend(mapPoint(point));
   for (const stop of walk.stops) bounds.extend(mapPoint(stop.point));
@@ -198,14 +199,14 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
 
   return <section className="map google-map" aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
-    <div className="map-label"><span className="map-label-dot"/> {walk.area}, Boston</div>
+    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : "Boston"}</div>
     <div className="map-controls">
       <div className="control-group">
         <button aria-label="Zoom in" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() + 1)}><Icon name="plus"/></button>
         <button aria-label="Zoom out" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() - 1)}><Icon name="minus"/></button>
       </div>
       <div className="control-group">
-        <button aria-label="Fit route on map" disabled={!context} onClick={() => fitWalk(context, walk)}><Icon name="fit"/></button>
+        <button aria-label="Fit route on map" disabled={!context || !walk.path.length} onClick={() => fitWalk(context, walk)}><Icon name="fit"/></button>
         <button aria-label={following ? "Stop location tracking" : "Show my location"}
           title={following ? "Stop location tracking" : "Show my location"}
           aria-pressed={following} onClick={locate}><Icon name="locate"/></button>

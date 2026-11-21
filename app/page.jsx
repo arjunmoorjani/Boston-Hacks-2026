@@ -7,10 +7,11 @@ import { Icon } from "./icons";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildTripToStart, buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
-import { loadRoutes } from "../lib/routes.mjs";
+import { filterRoutesByCategory, loadRoutes } from "../lib/routes.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
+const emptyWalk = { id: "no-route", title: "", area: "", category: "", description: "", stops: [], path: [] };
 
 function fullWalkDirections(walk) {
   const points = walk.stops.map(stop => stop.point.join(","));
@@ -32,7 +33,8 @@ function legDistance(meters) {
 export default function Home() {
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
-  const [routeIndex, setRouteIndex] = useState(0);
+  const [selectedWalkId, setSelectedWalkId] = useState(fallbackWalks[0]?.id ?? null);
+  const [disabledCategories, setDisabledCategories] = useState([]);
   const [selected, setSelected] = useState(null);
   const [following, setFollowing] = useState(false);
   const [location, setLocation] = useState(null);
@@ -52,15 +54,17 @@ export default function Home() {
   const [toStartEstimate, setToStartEstimate] = useState(null);
   const [toStartStatus, setToStartStatus] = useState("");
   const [toStartLoading, setToStartLoading] = useState(false);
-  const availableWalks = customWalk ? [...walks, customWalk] : walks;
-  const baseWalk = availableWalks[routeIndex] ?? availableWalks[0];
-  const walk = routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
-  const stats = walkStats(walk);
-  const stop = selected === null ? null : walk.stops[selected];
-  const destination = walk.stops[step ?? selected ?? 0];
-  const directions = `https://www.google.com/maps/dir/?api=1&destination=${destination.point.join(",")}&travelmode=walking`;
-  const transitDirections = `https://www.google.com/maps/dir/?api=1&destination=${walk.stops[0].point.join(",")}&travelmode=transit`;
-  const walkDirections = fullWalkDirections(walk);
+  const categories = [...new Set(walks.map(walk => walk.category))].sort();
+  const filteredWalks = filterRoutesByCategory(walks, disabledCategories);
+  const availableWalks = customWalk ? [...filteredWalks, customWalk] : filteredWalks;
+  const baseWalk = availableWalks.find(item => item.id === selectedWalkId) ?? null;
+  const walk = baseWalk && routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
+  const stats = walk ? walkStats(walk) : null;
+  const stop = walk && selected !== null ? walk.stops[selected] : null;
+  const destination = walk ? walk.stops[step ?? selected ?? 0] : null;
+  const directions = destination ? `https://www.google.com/maps/dir/?api=1&destination=${destination.point.join(",")}&travelmode=walking` : "";
+  const transitDirections = walk ? `https://www.google.com/maps/dir/?api=1&destination=${walk.stops[0].point.join(",")}&travelmode=transit` : "";
+  const walkDirections = walk ? fullWalkDirections(walk) : "";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +72,8 @@ export default function Home() {
       if (controller.signal.aborted) return;
       setWalks(routes);
       setRouteResults({});
-      setRouteIndex(0);
+      setDisabledCategories([]);
+      setSelectedWalkId(routes[0]?.id ?? null);
       setWalksStatus("");
     }).catch(error => {
       if (!controller.signal.aborted) setWalksStatus(`${error.message} Showing built-in walks.`);
@@ -77,7 +82,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!googleMapsConfigured || baseWalk.source !== "routes.json" || routeResults[baseWalk.id]) {
+    if (!baseWalk || !googleMapsConfigured || baseWalk.source !== "routes.json" || routeResults[baseWalk.id]) {
       setRouteStatus("");
       return;
     }
@@ -142,8 +147,7 @@ export default function Home() {
     });
   }, [following]);
 
-  function changeRoute(index) {
-    setRouteIndex(index);
+  function resetWalkInteraction() {
     setSelected(null);
     setStep(null);
     setComplete(false);
@@ -158,7 +162,23 @@ export default function Home() {
     setToStartLoading(false);
   }
 
+  function changeRoute(id) {
+    setSelectedWalkId(id);
+    resetWalkInteraction();
+  }
+
+  function toggleCategory(category) {
+    const turningOff = !disabledCategories.includes(category);
+    setDisabledCategories(items => turningOff ? [...items, category] : items.filter(item => item !== category));
+    if (turningOff && baseWalk?.category === category && baseWalk.id !== "custom") {
+      setSelectedWalkId(null);
+      setRouteStatus("");
+      resetWalkInteraction();
+    }
+  }
+
   function requestTripToStart() {
+    if (!walk) return;
     const request = {
       destination: [...walk.stops[0].point],
       travelMode: toStartMode,
@@ -177,6 +197,7 @@ export default function Home() {
   }
 
   function advance() {
+    if (!walk) return;
     if (step === walk.stops.length - 1) {
       setStep(null);
       setSelected(null);
@@ -211,7 +232,7 @@ export default function Home() {
         ...route, id: "custom", title: "Custom walk", area: "Boston", category: "Walking",
         symbol: "route", description: "Visit your selected places in the order shown.", stops,
       });
-      changeRoute(walks.length);
+      changeRoute("custom");
     } catch {
       setRouteError("Couldn’t calculate this walk. Check that Routes API is enabled, or try different stops.");
     } finally {
@@ -228,18 +249,26 @@ export default function Home() {
     <section className="intro" aria-labelledby="explore">
       <h1 id="explore">Explore Boston</h1>
       <div>
+        <fieldset className="route-filters">
+          <legend>Filter walks</legend>
+          {categories.map(category => <label key={category}>
+            <input type="checkbox" checked={!disabledCategories.includes(category)} onChange={() => toggleCategory(category)}/>
+            {category}
+          </label>)}
+        </fieldset>
         <div className="routes" aria-label="Choose a walk">
-          {availableWalks.map((item, index) => <button key={item.id} type="button" aria-pressed={routeIndex === index} onClick={() => changeRoute(index)}>
+          {availableWalks.map(item => <button key={item.id} type="button" aria-pressed={selectedWalkId === item.id} onClick={() => changeRoute(item.id)}>
             <Icon name={item.symbol} size={17}/>{item.title}
           </button>)}
         </div>
+        {availableWalks.length === 0 && <p className="routes-status" role="status">No walks match these categories.</p>}
         {walksStatus && <p className="routes-status" role="status">{walksStatus}</p>}
       </div>
     </section>
 
     <div className="experience">
       <div className="map-panel">
-      <MapView walk={walk} selected={selected} onSelect={setSelected} location={following ? location : null}
+      <MapView walk={walk ?? emptyWalk} selected={selected} onSelect={setSelected} location={following ? location : null}
         draftPlaces={draftPlaces} onAddPlace={addPlace} canAddPlace={!building && draftPlaces.length < maxStops}
         following={following} locationStatus={locationStatus}
         locate={() => {
@@ -263,7 +292,7 @@ export default function Home() {
       </section>}
       </div>
 
-      <section className="sheet" aria-labelledby="walk-title">
+      {walk ? <section className="sheet" aria-labelledby="walk-title">
         <div className="walk-category">{walk.area} <span>·</span> {walk.category}</div>
         <h2 id="walk-title">{walk.title}</h2>
         <div className="stats">
@@ -348,7 +377,10 @@ export default function Home() {
           {step === null && <a href={walkDirections} target="_blank" rel="noreferrer">Open full walk in Google Maps <Icon name="external" size={15}/></a>}
           {step === null && <a href={transitDirections} target="_blank" rel="noreferrer">Take the T to the start <Icon name="external" size={15}/></a>}
         </div>
-      </section>
+      </section> : <section className="sheet empty-walk" aria-labelledby="choose-walk-title">
+        <h2 id="choose-walk-title">Choose a walk</h2>
+        <p>Select a visible walk above, or turn a category back on. Place icons, location, and T lines remain available on the map.</p>
+      </section>}
     </div>
   </main>;
 }
