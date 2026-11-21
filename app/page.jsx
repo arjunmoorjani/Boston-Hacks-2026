@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
+import { RouteList } from "./route-list";
+import { PlanDetail } from "./plan-detail";
+import { PlanEditor } from "./plan-editor";
+import { ProfilePage, RankPrompt, Avatar } from "./profile";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildTripToStart, buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
 import { saveOuting } from "../lib/save-outing.mjs";
 import { filterRoutesByCategory, loadRoutes, routesForMap } from "../lib/routes.mjs";
+import { buildSuggestData } from "../lib/suggest-data.mjs";
+import { completionFor, emptyProfile, loadProfile, saveProfile } from "../lib/profile-store.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
+
 const emptyWalk = { id: "no-route", title: "", area: "", category: "", description: "", stops: [], path: [] };
 
 function fullWalkDirections(walk) {
@@ -41,15 +48,20 @@ export default function Home() {
   const [location, setLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [step, setStep] = useState(null);
-  const [expanded, setExpanded] = useState(false);
   const [complete, setComplete] = useState(false);
-  const [customWalk, setCustomWalk] = useState(null);
+  const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [draftPlaces, setDraftPlaces] = useState([]);
-  const [outingName, setOutingName] = useState("");
   const [savingOuting, setSavingOuting] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(null);
   const [building, setBuilding] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [view, setView] = useState("list"); // sheet shows: "list" of walks, one plan's "detail", or the plan "edit"or
+  const [forkOf, setForkOf] = useState(null);    // { heading } for the editor
+  const [draftTitle, setDraftTitle] = useState("");
+  const [removed, setRemoved] = useState(null);   // last removed stop, for Undo
+  const [editFrom, setEditFrom] = useState("list");
   const [routeResults, setRouteResults] = useState({});
   const [routeStatus, setRouteStatus] = useState("");
   const [toStartMode, setToStartMode] = useState("WALKING");
@@ -58,14 +70,27 @@ export default function Home() {
   const [toStartEstimate, setToStartEstimate] = useState(null);
   const [toStartStatus, setToStartStatus] = useState("");
   const [toStartLoading, setToStartLoading] = useState(false);
+  const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
   const categories = [...new Set(walks.map(walk => walk.category))].sort();
-  const filteredWalks = filterRoutesByCategory(walks, disabledCategories);
-  const availableWalks = customWalk ? [...filteredWalks, customWalk] : filteredWalks;
+  const availableWalks = useMemo(() => [
+    ...filterRoutesByCategory(walks, disabledCategories), ...profile.customWalks,
+  ], [walks, disabledCategories, profile.customWalks]);
   const baseWalk = availableWalks.find(item => item.id === selectedWalkId) ?? null;
-  const walk = baseWalk && routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
-  const mapWalks = routesForMap(availableWalks, selectedWalkId, routeResults);
+  const routeResult = baseWalk ? routeResults[baseWalk.id] : null;
+  const walk = useMemo(() => routeResult ? { ...baseWalk, ...routeResult } : baseWalk, [baseWalk, routeResult]);
   const stats = walk ? walkStats(walk) : null;
-  const stop = walk && selected !== null ? walk.stops[selected] : null;
+  // While editing, the map shows the draft (straight lines between stops) so reordering is visible right away.
+  const draftWalk = useMemo(() => {
+    if (view !== "edit" || !draftPlaces.length) return null;
+    const stops = draftPlaces.map(place => ({ id: place.osm_id, name: place.name, address: place.address, point: [Number(place.latitude), Number(place.longitude)] }));
+    return { id: `draft:${stops.map(stop => stop.id).join("|")}`, area: "Draft plan", category: "Draft", symbol: "route", stops, path: stops.map(stop => stop.point) };
+  }, [view, draftPlaces]);
+  const mapWalk = draftWalk ?? (view === "detail" ? walk : null) ?? emptyWalk;
+  const mapWalks = useMemo(() => draftWalk
+    ? [draftWalk]
+    : routesForMap(availableWalks, view === "detail" ? selectedWalkId : null, routeResults),
+  [draftWalk, availableWalks, view, selectedWalkId, routeResults]);
+  const closeProfile = useCallback(() => setShowProfile(false), []);
   const destination = walk ? walk.stops[step ?? selected ?? 0] : null;
   const directions = destination ? `https://www.google.com/maps/dir/?api=1&destination=${destination.point.join(",")}&travelmode=walking` : "";
   const transitDirections = walk ? `https://www.google.com/maps/dir/?api=1&destination=${walk.stops[0].point.join(",")}&travelmode=transit` : "";
@@ -78,13 +103,21 @@ export default function Home() {
       setWalks(routes);
       setRouteResults({});
       setDisabledCategories([]);
-      setSelectedWalkId(null);
       setWalksStatus("");
     }).catch(error => {
       if (!controller.signal.aborted) setWalksStatus(`${error.message} Showing built-in walks.`);
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    setProfile(loadProfile()); // browser-only, so after the first render
+    setProfileLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (profileLoaded) saveProfile(profile);
+  }, [profile, profileLoaded]);
+  const updateProfile = change => setProfile(old => ({ ...old, ...(typeof change === "function" ? change(old) : change) }));
 
   useEffect(() => {
     if (!baseWalk || !googleMapsConfigured || baseWalk.source !== "routes.json" || routeResults[baseWalk.id]) {
@@ -132,7 +165,11 @@ export default function Home() {
   useEffect(() => {
     if (!following) return;
     if (!window.isSecureContext || !navigator.geolocation) {
-      setLocationStatus("Location needs a secure connection (HTTPS) or localhost.");
+      const message = "Location needs a secure connection (HTTPS) or localhost.";
+      setLocationStatus(message);
+      setPendingToStart(null);
+      setToStartStatus(message);
+      setToStartLoading(false);
       setFollowing(false);
       return;
     }
@@ -152,11 +189,22 @@ export default function Home() {
     });
   }, [following]);
 
+  const sheet = useRef(null);
+  // Phones scroll the page to move the sheet; on desktop the sheet scrolls by itself.
+  const sheetTop = () => (sheet.current?.offsetTop ?? 0) - 64;
+  function collapseSheet() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    sheet.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function toggleSheet() {
+    if (window.scrollY > 20) collapseSheet();
+    else window.scrollTo({ top: sheetTop(), behavior: "smooth" });
+  }
+
   function resetWalkInteraction() {
     setSelected(null);
     setStep(null);
     setComplete(false);
-    setExpanded(false);
     setFollowing(false);
     setLocation(null);
     setLocationStatus("");
@@ -168,16 +216,17 @@ export default function Home() {
   }
 
   function changeRoute(id) {
-    setSelectedWalkId(current => current === id ? null : id);
+    setSelectedWalkId(id);
     resetWalkInteraction();
   }
 
   function toggleCategory(category) {
     const turningOff = !disabledCategories.includes(category);
     setDisabledCategories(items => turningOff ? [...items, category] : items.filter(item => item !== category));
-    if (turningOff && baseWalk?.category === category && baseWalk.id !== "custom") {
+    if (turningOff && baseWalk?.category === category) {
       setSelectedWalkId(null);
       setRouteStatus("");
+      setView("list");
       resetWalkInteraction();
     }
   }
@@ -201,12 +250,28 @@ export default function Home() {
     setToStartRequest({ ...request, origin: [...location] });
   }
 
+  function openWalk(id) {
+    if (![...walks, ...profile.customWalks].some(item => item.id === id)) return false;
+    const category = walks.find(item => item.id === id)?.category;
+    setDisabledCategories(items => items.filter(item => item !== category));
+    changeRoute(id);
+    setView("detail");
+    setShowProfile(false);
+    collapseSheet();
+    return true;
+  }
+
+  function deleteCustomWalk(id) {
+    updateProfile(old => ({ customWalks: old.customWalks.filter(item => item.id !== id), ranking: old.ranking.filter(item => item !== id) }));
+    if (selectedWalkId === id) { changeRoute(null); setView("list"); }
+  }
+
   function advance() {
-    if (!walk) return;
     if (step === walk.stops.length - 1) {
       setStep(null);
       setSelected(null);
       setComplete(true);
+      updateProfile(old => ({ completions: [completionFor(walk, stats), ...old.completions] }));
       return;
     }
     const next = step === null ? 0 : step + 1;
@@ -215,21 +280,84 @@ export default function Home() {
     setComplete(false);
   }
 
+  function startEditing(places, title, heading) {
+    setDraftPlaces(places.slice(0, maxStops));
+    setDraftTitle(title);
+    setSaveFeedback(null);
+    setForkOf({ heading });
+    setRemoved(null);
+    setRouteError("");
+    setEditFrom(view === "edit" ? editFrom : view);
+    setView("edit");
+    setSelected(null);
+    collapseSheet();
+  }
+
+  // Tapping "Add to walk" on a map place: add it to the plan being edited, or start a new plan with it.
   function addPlace(place) {
     if (building || savingOuting) return;
-    setDraftPlaces(items => items.length >= maxStops || items.some(item => item.osm_id === place.osm_id)
-      ? items : [...items, place]);
+    if (view !== "edit") return startEditing([place], "My plan", "New plan");
+    setDraftPlaces(items => items.length >= maxStops || items.some(item => item.osm_id === place.osm_id) ? items : [...items, place]);
+    setRemoved(null);
     setRouteError("");
   }
 
-  async function handleSaveOuting(event) {
-    event.preventDefault();
-    if (savingOuting || !outingName.trim() || !draftPlaces.length) return;
+  function moveStop(index, change) {
+    setDraftPlaces(items => {
+      const next = [...items];
+      const target = index + change;
+      if (target < 0 || target >= next.length) return items;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setSelected(null);
+  }
+
+  function removeStop(index) {
+    setRemoved({ place: draftPlaces[index], index });
+    setDraftPlaces(items => items.filter((_, i) => i !== index));
+    setSelected(null);
+  }
+
+  function undoRemove() {
+    if (!removed) return;
+    setDraftPlaces(items => items.length >= maxStops ? items : [...items.slice(0, removed.index), removed.place, ...items.slice(removed.index)]);
+    setRemoved(null);
+  }
+
+  function cancelEditing() {
+    setDraftPlaces([]);
+    setRemoved(null);
+    setRouteError("");
+    setView(editFrom === "edit" ? "detail" : editFrom);
+    collapseSheet();
+  }
+
+  // Fork: copy this plan's stops into the editor.
+  // Continue: start a follow-up plan from this plan's last stop plus the picked "Keep going" stops.
+  function fork(extra = []) {
+    const asPlace = stop => ({
+      placeId: stop.placeId,
+      osm_id: stop.placeId ? `google:${stop.placeId}` : stop.id ?? stop.name, // same id as tapping that place on the map
+      name: stop.name, latitude: stop.point?.[0] ?? stop.lat, longitude: stop.point?.[1] ?? stop.lng,
+      address: stop.address ?? "", tags: { description: stop.note ?? "" },
+    });
+    if (extra.length) {
+      const last = walk.stops.at(-1);
+      startEditing([last, ...extra].map(asPlace), `After ${walk.title}`, `Continue from ${last.name}`);
+    } else {
+      startEditing(walk.stops.map(asPlace), `${walk.title}, your version`, `Forking ${walk.title}`);
+    }
+  }
+
+  async function handleSaveOuting() {
+    if (savingOuting || building || !draftTitle.trim() || !draftPlaces.length
+      || draftPlaces.some(stop => !stop.placeId)) return;
 
     setSavingOuting(true);
     setSaveFeedback(null);
     try {
-      await saveOuting(outingName, draftPlaces.map(stop => stop.placeId));
+      await saveOuting(draftTitle, draftPlaces.map(stop => stop.placeId));
       setSaveFeedback({ message: "Outing saved." });
     } catch (error) {
       setSaveFeedback({ error: true, message: error?.message || "Couldn’t save the outing." });
@@ -239,9 +367,9 @@ export default function Home() {
   }
 
   async function createWalk() {
-    if (building || draftPlaces.length < 2) return;
+    if (building || savingOuting || draftPlaces.length < 2 || !draftTitle.trim()) return;
     const stops = draftPlaces.map(place => ({
-      id: place.osm_id, name: place.name, point: [Number(place.latitude), Number(place.longitude)],
+      id: place.osm_id, placeId: place.placeId ?? null, name: place.name, point: [Number(place.latitude), Number(place.longitude)],
       address: place.address || [place.tags?.["addr:housenumber"], place.tags?.["addr:street"]].filter(Boolean).join(" "),
       note: place.tags?.description || "A stop on your custom walk.",
     }));
@@ -249,48 +377,27 @@ export default function Home() {
     setRouteError("");
     try {
       const route = await buildWalkingRoute(stops);
-      setCustomWalk({
-        ...route, id: "custom", title: "Custom walk", area: "Boston", category: "Walking",
+      const saved = {
+        ...route, id: `custom:${Date.now()}`, title: draftTitle.trim(), area: "Your plan", category: "Custom walk",
         symbol: "route", description: "Visit your selected places in the order shown.", stops,
-      });
-      changeRoute("custom");
+      };
+      updateProfile(old => ({ customWalks: [...old.customWalks, saved] }));
+      changeRoute(saved.id);
+      setView("detail");
+      setDraftPlaces([]);
+      setRemoved(null);
+      collapseSheet();
     } catch {
-      setRouteError("Couldn’t calculate this walk. Check that Routes API is enabled, or try different stops.");
+      setRouteError("Couldn’t get a walking route for these stops. Try again, or swap a stop that’s far away.");
     } finally {
       setBuilding(false);
     }
   }
 
-  return <main className="shell">
-    <header className="header">
-      <div className="brand"><span><Icon name="route" size={23}/></span>sidewalk<span className="brand-period">.</span></div>
-      <div className="city"><span/> BOSTON, MA</div>
-    </header>
-
-    <section className="intro" aria-labelledby="explore">
-      <h1 id="explore">Explore Boston</h1>
-      <div>
-        <fieldset className="route-filters">
-          <legend>Filter walks</legend>
-          {categories.map(category => <label key={category}>
-            <input type="checkbox" checked={!disabledCategories.includes(category)} onChange={() => toggleCategory(category)}/>
-            {category}
-          </label>)}
-        </fieldset>
-        <div className="routes" aria-label="Choose a walk">
-          {availableWalks.map(item => <button key={item.id} type="button" aria-pressed={selectedWalkId === item.id} onClick={() => changeRoute(item.id)}>
-            <Icon name={item.symbol} size={17}/>{item.title}
-          </button>)}
-        </div>
-        {availableWalks.length === 0 && <p className="routes-status" role="status">No walks match these categories.</p>}
-        {walksStatus && <p className="routes-status" role="status">{walksStatus}</p>}
-      </div>
-    </section>
-
-    <div className="experience">
-      <div className="map-panel">
-      <MapView walk={walk ?? emptyWalk} walks={mapWalks} selected={selected} onSelect={setSelected} location={following ? location : null}
-        draftPlaces={draftPlaces} onAddPlace={addPlace} canAddPlace={!building && !savingOuting && draftPlaces.length < maxStops}
+  return <main className="app">
+    <div className="map-panel">
+      <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={setSelected} location={following ? location : null}
+        draftPlaces={view === "edit" ? draftPlaces : []} onAddPlace={addPlace} canAddPlace={!building && !savingOuting && (view !== "edit" || draftPlaces.length < maxStops)}
         following={following} locationStatus={locationStatus}
         locate={() => {
           if (following) {
@@ -299,120 +406,95 @@ export default function Home() {
           }
           setFollowing(!following);
         }} />
-      {googleMapsConfigured && draftPlaces.length > 0 && <section className="sheet draft-walk" aria-labelledby="draft-walk-title">
-        <h3 id="draft-walk-title">Build a walk</h3>
-        <ol>{draftPlaces.map(place => <li key={place.osm_id}>
-          <span>{place.name}</span>
-          <button className="plain-button" aria-label={`Remove ${place.name}`} disabled={building || savingOuting}
-            onClick={() => setDraftPlaces(items => items.filter(item => item.osm_id !== place.osm_id))}><Icon name="close" size={17}/></button>
-        </li>)}</ol>
-        {routeError && <p role="alert">{routeError}</p>}
-        <button className="primary" type="button" disabled={draftPlaces.length < 2 || building} onClick={createWalk}>
-          {building ? "Calculating…" : "Calculate walking route"}
-        </button>
-        <form className="save-outing" onSubmit={handleSaveOuting}>
-          <label htmlFor="outing-name">Outing name</label>
-          <input id="outing-name" value={outingName} onChange={event => setOutingName(event.target.value)}
-            required disabled={savingOuting} />
-          <button className="primary" type="submit"
-            disabled={savingOuting || !outingName.trim() || !draftPlaces.length}>
-            {savingOuting ? "Saving…" : "Save outing"}
-          </button>
-          <p role="status">{saveFeedback && !saveFeedback.error ? saveFeedback.message : ""}</p>
-          <p role="alert">{saveFeedback?.error ? saveFeedback.message : ""}</p>
-        </form>
-      </section>}
-      </div>
-
-      {walk ? <section className="sheet" aria-labelledby="walk-title">
-        <div className="walk-category">{walk.area} <span>·</span> {walk.category}</div>
-        <h2 id="walk-title">{walk.title}</h2>
-        <div className="stats">
-          <span><Icon name="route" size={16}/>{stats.miles} mi</span>
-          <span><Icon name="clock" size={16}/>Within walk · ~{stats.minutes} min</span>
-          <span><span className="stats-pin"/>{walk.stops.length} stops</span>
-        </div>
-        <p className="description">{walk.description}</p>
-        {routeStatus && <p className="route-status" role="status">{routeStatus}</p>}
-        {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
-
-        <section className="to-start" aria-labelledby="to-start-title">
-          <div className="to-start-heading">
-            <h3 id="to-start-title">Get to start</h3>
-            <div className="travel-modes" role="group" aria-label="Travel mode to the start">
-              {["WALKING", "TRANSIT"].map(mode => <button key={mode} type="button"
-                aria-pressed={toStartMode === mode} onClick={() => {
-                  setToStartMode(mode);
-                  setToStartEstimate(null);
-                  setToStartStatus("");
-                }}>{mode === "WALKING" ? "Walk" : "Transit"}</button>)}
-            </div>
-          </div>
-          <button className="catalog-button" type="button" disabled={toStartLoading || !googleMapsConfigured}
-            onClick={requestTripToStart}>{toStartLoading ? "Calculating…" : "Get travel time"}</button>
-          {toStartStatus && <p role="status">{toStartStatus}</p>}
-          {toStartEstimate && <p className="to-start-result" role="status">
-            <strong>{Math.max(1, Math.round(toStartEstimate.minutes))} min to start</strong>
-            <span>{toStartEstimate.travelMode === "TRANSIT" ? "Transit" : "Walk"} · {legDistance(toStartEstimate.meters)}</span>
-          </p>}
-        </section>
-
-        {step !== null && <div className="walk-progress" role="status">
-          <span>Stop {step + 1} of {walk.stops.length}</span>
-          <strong>{walk.stops[step].name}</strong>
-          <a href={directions} target="_blank" rel="noreferrer">Directions <Icon name="external" size={14}/></a>
-        </div>}
-        {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
-
-        {stop && selected !== step && <div className="stop-preview" role="status">
-          <span className="mini-pin">{selected + 1}</span>
-          <div><strong>{stop.name}</strong><p>{stop.note}</p></div>
-          <button className="plain-button" aria-label="Close stop preview" onClick={() => setSelected(null)}><Icon name="close" size={17}/></button>
-        </div>}
-
-        <button className="itinerary-toggle" aria-expanded={expanded} aria-controls="itinerary" onClick={() => setExpanded(value => !value)}>
-          <span>Itinerary</span><Icon name={expanded ? "minus" : "plus"} size={18}/>
-        </button>
-        <ol className="itinerary" id="itinerary" hidden={!expanded}>
-          {walk.stops.map((item, index) => <li key={item.id ?? item.name}>
-            <button onClick={() => setSelected(index)} aria-pressed={selected === index}>
-              <span className="mini-pin">{index + 1}</span>
-              <span><strong>{item.name}</strong><small>{item.address}</small></span>
-            </button>
-          </li>)}
-        </ol>
-
-        {walk.legs?.length > 0 && <section className="route-directions" aria-labelledby="route-directions-title">
-          <h3 id="route-directions-title">Walking directions</h3>
-          {walk.legs.map((leg, index) => <details key={`${walk.id}-leg-${index}`}>
-            <summary>
-              <span><strong>{walk.stops[index]?.name}</strong> to <strong>{walk.stops[index + 1]?.name}</strong></span>
-              <small>{legDistance(leg.meters)} · {Math.max(1, Math.round(leg.minutes))} min</small>
-            </summary>
-            {leg.steps.length > 0
-              ? <ol>{leg.steps.map((routeStep, stepIndex) => <li key={`${routeStep.instruction}-${stepIndex}`}>
-                  <span>{routeStep.instruction}</span>
-                  {routeStep.meters > 0 && <small>{legDistance(routeStep.meters)}</small>}
-                </li>)}</ol>
-              : <p>No step details returned.</p>}
-          </details>)}
-        </section>}
-
-        <div className="actions">
-          <button className="primary" onClick={advance}>
-            {step === null ? complete ? "Walk again" : "Start walk" : step === walk.stops.length - 1 ? "Finish walk" : "Mark stop visited"}
-            <Icon name={step === null ? "arrow" : "check"} size={20}/>
-          </button>
-          {step === null
-            ? <a href={directions} target="_blank" rel="noreferrer">Directions to {selected === null ? "start" : "this stop"} <Icon name="external" size={15}/></a>
-            : <button className="cancel" onClick={() => { setStep(null); setSelected(null); }}>End walk</button>}
-          {step === null && <a href={walkDirections} target="_blank" rel="noreferrer">Open full walk in Google Maps <Icon name="external" size={15}/></a>}
-          {step === null && <a href={transitDirections} target="_blank" rel="noreferrer">Take the T to the start <Icon name="external" size={15}/></a>}
-        </div>
-      </section> : <section className="sheet empty-walk" aria-labelledby="choose-walk-title">
-        <h2 id="choose-walk-title">Choose a walk</h2>
-        <p>Select a visible walk above, or turn a category back on. Place icons, location, and T lines remain available on the map.</p>
-      </section>}
     </div>
+
+    <header className="topbar">
+      <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
+      <div className="topbar-right">
+        <div className="city"><span/> BOSTON, MA</div>
+        <button type="button" className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Your profile">
+          <Avatar name={profile.name} size={34}/>
+        </button>
+      </div>
+    </header>
+
+    {/* Phones: transparent space over the map; scrolling the page pulls the sheet up over it. */}
+    <div className="sheet-spacer" aria-hidden="true"/>
+
+    <section className="bottom-sheet" ref={sheet} aria-label={view === "edit" ? "Edit plan" : undefined}
+      aria-labelledby={view === "detail" ? "walk-title" : view === "list" ? "more-walks" : undefined}>
+      <button type="button" className="sheet-handle" onClick={toggleSheet} aria-label="Expand or collapse the panel"><span/></button>
+      {view === "edit"
+        ? <PlanEditor heading={forkOf?.heading ?? "New plan"} title={draftTitle} onTitle={setDraftTitle}
+            places={draftPlaces} maxStops={maxStops} onMove={moveStop} onRemove={removeStop}
+            removed={removed} onUndo={undoRemove} onCancel={cancelEditing} onSave={createWalk}
+            building={building} error={routeError}
+            savingOuting={savingOuting} saveFeedback={saveFeedback} onSaveOuting={handleSaveOuting}/>
+        : view === "detail" && walk
+        ? <PlanDetail walk={walk} stats={stats} suggestData={suggestData} step={step} complete={complete} selected={selected}
+            directions={directions} transitDirections={transitDirections}
+            onBack={() => { changeRoute(null); setView("list"); collapseSheet(); }}
+            onSelectStop={index => { setSelected(index); collapseSheet(); }}
+            onAdvance={advance} onEndWalk={() => { setStep(null); setSelected(null); }} onFork={fork}
+            routing={<>
+                {routeStatus && <p className="route-status" role="status">{routeStatus}</p>}
+                {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
+
+                <section className="to-start" aria-labelledby="to-start-title">
+                  <div className="to-start-heading">
+                    <h3 id="to-start-title">Get to start</h3>
+                    <div className="travel-modes" role="group" aria-label="Travel mode to the start">
+                      {["WALKING", "TRANSIT"].map(mode => <button key={mode} type="button"
+                        aria-pressed={toStartMode === mode} onClick={() => {
+                          setToStartMode(mode);
+                          setToStartEstimate(null);
+                          setToStartStatus("");
+                        }}>{mode === "WALKING" ? "Walk" : "Transit"}</button>)}
+                    </div>
+                  </div>
+                  <button className="catalog-button" type="button" disabled={toStartLoading || !googleMapsConfigured}
+                    onClick={requestTripToStart}>{toStartLoading ? "Calculating…" : "Get travel time"}</button>
+                  {toStartStatus && <p role="status">{toStartStatus}</p>}
+                  {toStartEstimate && <p className="to-start-result" role="status">
+                    <strong>{Math.max(1, Math.round(toStartEstimate.minutes))} min to start</strong>
+                    <span>{toStartEstimate.travelMode === "TRANSIT" ? "Transit" : "Walk"} · {legDistance(toStartEstimate.meters)}</span>
+                  </p>}
+                </section>
+
+                {walk.legs?.length > 0 && <section className="route-directions" aria-labelledby="route-directions-title">
+                  <h3 id="route-directions-title">Walking directions</h3>
+                  {walk.legs.map((leg, index) => <details key={`${walk.id}-leg-${index}`}>
+                    <summary>
+                      <span><strong>{walk.stops[index]?.name}</strong> to <strong>{walk.stops[index + 1]?.name}</strong></span>
+                      <small>{legDistance(leg.meters)} · {Math.max(1, Math.round(leg.minutes))} min</small>
+                    </summary>
+                    {leg.steps.length > 0
+                      ? <ol>{leg.steps.map((routeStep, stepIndex) => <li key={`${routeStep.instruction}-${stepIndex}`}>
+                          <span>{routeStep.instruction}</span>
+                          {routeStep.meters > 0 && <small>{legDistance(routeStep.meters)}</small>}
+                        </li>)}</ol>
+                      : <p>No step details returned.</p>}
+                  </details>)}
+                </section>}
+
+                <a href={walkDirections} target="_blank" rel="noreferrer">Open full walk in Google Maps <Icon name="external" size={15}/></a>
+            </>}
+            rankSlot={complete && !profile.ranking.includes(walk.id) && <RankPrompt newId={walk.id} ranking={profile.ranking}
+              titleOf={id => availableWalks.find(item => item.id === id)?.title ?? profile.completions.find(c => c.walkId === id)?.title ?? id}
+              onDone={ranking => updateProfile({ ranking })}/>}/>
+        : <RouteList walks={availableWalks} index={availableWalks.indexOf(baseWalk)} status={walksStatus}
+            filters={<fieldset className="route-filters">
+              <legend>Filter walks</legend>
+              {categories.map(category => <label key={category}>
+                <input type="checkbox" checked={!disabledCategories.includes(category)} onChange={() => toggleCategory(category)}/>
+                {category}
+              </label>)}
+            </fieldset>}
+            onChange={index => openWalk(availableWalks[index].id)}/>}
+    </section>
+    {showProfile && <ProfilePage profile={profile} walks={availableWalks} onClose={closeProfile}
+      onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
+      onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
+      onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
   </main>;
 }

@@ -12,7 +12,9 @@ function fitWalks({ map, maps }, walks) {
     for (const point of walk.path) bounds.extend(mapPoint(point));
     for (const stop of walk.stops) bounds.extend(mapPoint(stop.point));
   }
-  map.fitBounds(bounds, { top: 74, left: 42, right: 64, bottom: 64 });
+  const wide = map.getDiv().clientWidth >= 900;
+  map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 }
+    : { top: 120, left: 40, right: 70, bottom: 40 });
 }
 
 function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, className, text, zIndex, collisionBehavior }) {
@@ -225,6 +227,6 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, loc
     {(mapError || !context || locationStatus || placeStatus) && <div className="map-notice" role="status">{mapError || locationStatus || placeStatus || "Loading Google Maps…"}</div>}
     {activePlace && <PlaceDetails key={activePlace.osm_id} place={activePlace} onClose={() => setActivePlace(null)}
       onAddPlace={onAddPlace} addLabel={draftPlaces.some(place => place.osm_id === activePlace.osm_id)
-        ? "Already in your walk" : canAddPlace ? "Add to walk" : "Walk list unavailable"} />}
+        ? "Already in your plan" : canAddPlace ? "Add to walk" : "Walk list unavailable"} />}
   </section>;
 }
