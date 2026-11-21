@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { Icon } from "./icons";
 
 function fitWalks({ map, maps }, walks) {
   const visible = walks.filter(walk => walk?.path?.length);
@@ -12,9 +11,31 @@ function fitWalks({ map, maps }, walks) {
     for (const point of walk.path) bounds.extend(mapPoint(point));
     for (const stop of walk.stops) bounds.extend(mapPoint(stop.point));
   }
+  // One place (e.g. a plan you just started) would zoom all the way in: stay at street level so nearby places show.
+  const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
+  if (Math.abs(ne.lat() - sw.lat()) < 0.0008 && Math.abs(ne.lng() - sw.lng()) < 0.0008) {
+    map.setCenter(bounds.getCenter());
+    map.setZoom(16);
+    return;
+  }
   const wide = map.getDiv().clientWidth >= 900;
   map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 }
     : { top: 120, left: 40, right: 70, bottom: 40 });
+}
+
+// Fit the map to a set of [lat, lng] points, leaving room for the top bar and the sheet/panel.
+function fitPoints({ map, maps }, points) {
+  if (!points.length) return;
+  const bounds = new maps.LatLngBounds();
+  for (const point of points) bounds.extend(mapPoint(point));
+  const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
+  if (Math.abs(ne.lat() - sw.lat()) < 0.0008 && Math.abs(ne.lng() - sw.lng()) < 0.0008) {
+    map.setCenter(bounds.getCenter());
+    map.setZoom(17);
+    return;
+  }
+  const wide = map.getDiv().clientWidth >= 900;
+  map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 } : { top: 120, left: 40, right: 70, bottom: 40 });
 }
 
 function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, className, text, zIndex, collisionBehavior }) {
@@ -31,74 +52,18 @@ function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, clas
   return marker;
 }
 
-function photoFor(place) {
-  if (place.photo) return place.photo;
-  const source = place.tags?.photo_url || place.tags?.image;
-  if (!source) return null;
-
-  try {
-    const url = new URL(source);
-    if (url.protocol !== "https:") return null;
-    if (url.hostname === "commons.wikimedia.org" && url.pathname.startsWith("/wiki/File:")) {
-      const file = url.pathname.slice("/wiki/File:".length);
-      return { src: `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=640`, credit: url.href };
-    }
-    return { src: url.href };
-  } catch {
-    return null;
-  }
-}
-
-function PlaceDetails({ place, onClose, onAddPlace, addLabel }) {
-  const dialog = useRef(null);
-  const [failed, setFailed] = useState(false);
-  const photo = photoFor(place);
-  useEffect(() => {
-    dialog.current.showModal();
-  }, []);
-
-  return <dialog ref={dialog} className="place-dialog sheet" aria-labelledby="map-place-name" onClose={onClose}>
-    <div className="place-dialog-heading">
-      <h2 id="map-place-name">{place.name}</h2>
-      <form method="dialog"><button className="plain-button" aria-label="Close place"><Icon name="close"/></button></form>
-    </div>
-    {place.address && <p className="place-dialog-address">{place.address}</p>}
-    {photo && !failed
-      ? <figure>
-          <img src={photo.src} alt={place.name} onError={() => setFailed(true)} referrerPolicy="no-referrer"/>
-          {(photo.credit || photo.attributions?.length > 0) && <figcaption>
-            {photo.credit
-              ? <a href={photo.credit} target="_blank" rel="noreferrer">Photo credits</a>
-              : <>Photo by {photo.attributions.map((author, index) => <span key={`${author.displayName}-${index}`}>
-                  {index > 0 && ", "}
-                  {author.uri
-                    ? <a href={author.uri} target="_blank" rel="noreferrer">{author.displayName}</a>
-                    : author.displayName}
-                </span>)}</>}
-          </figcaption>}
-        </figure>
-      : <p>No photo available.</p>}
-    {place.attributions?.map((attribution, index) => <p className="place-attribution" key={`${attribution}-${index}`}>{attribution}</p>)}
-    <button className="primary" type="button" disabled={addLabel !== "Add to walk"} onClick={() => {
-      onAddPlace(place);
-      dialog.current.close();
-    }}>{addLabel}</button>
-  </dialog>;
-}
-
-export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onAddPlace, draftPlaces, canAddPlace }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, location, following, locationStatus, onPlaceClick, directions }) {
   const container = useRef(null);
   const stops = useRef([]);
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
-  const [activePlace, setActivePlace] = useState(null);
   const [mapError, setMapError] = useState("");
-  const [placeStatus, setPlaceStatus] = useState("");
+  const placeClick = useRef(onPlaceClick);
+  placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
 
   useEffect(() => {
     let disposed = false;
     let poiClickListener;
-    let placeRequest = 0;
     const handleAuthFailure = () => setMapError("Google Maps couldn’t authenticate. Check the key and website restrictions.");
     window.addEventListener("sidewalk-google-auth-failure", handleAuthFailure);
 
@@ -112,45 +77,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
         disableDefaultUI: true, keyboardShortcuts: true, gestureHandling: "greedy",
         clickableIcons: true, maxZoom: 20, minZoom: 3,
       });
-      poiClickListener = map.addListener("click", async event => {
+      // Tapping a place icon on the map opens its profile (app/place-profile.jsx) instead of Google's popup.
+      poiClickListener = map.addListener("click", event => {
         if (!("placeId" in event) || !event.placeId) return;
         event.stop();
-        const request = ++placeRequest;
-        setActivePlace(null);
-        setPlaceStatus("Loading place…");
-
-        try {
-          const { Place } = await maps.importLibrary("places");
-          const place = new Place({ id: event.placeId });
-          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "photos"] });
-          if (disposed || request !== placeRequest) return;
-
-          const photo = place.photos?.[0];
-          const point = place.location ? [place.location.lat(), place.location.lng()] : null;
-          setActivePlace({
-            source: "google",
-            osm_id: `google:${event.placeId}`,
-            placeId: event.placeId,
-            name: place.displayName || "Google Maps place",
-            address: place.formattedAddress || "",
-            latitude: point?.[0],
-            longitude: point?.[1],
-            attributions: place.attributions || [],
-            photo: photo ? {
-              src: photo.getURI({ maxWidth: 800, maxHeight: 600 }),
-              attributions: photo.authorAttributions.map(author => ({
-                displayName: author.displayName || "Google Maps contributor",
-                uri: author.uri || "",
-              })),
-            } : null,
-            tags: { description: "A place discovered on Google Maps." },
-          });
-          setPlaceStatus("");
-        } catch {
-          if (!disposed && request === placeRequest) {
-            setPlaceStatus("Couldn’t load this place. Check that Places API (New) is enabled.");
-          }
-        }
+        placeClick.current?.(event.placeId, { point: event.latLng ? [event.latLng.lat(), event.latLng.lng()] : null });
       });
       setContext({ map, maps, AdvancedMarkerElement });
     }).catch(() => {
@@ -159,7 +90,6 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
 
     return () => {
       disposed = true;
-      placeRequest += 1;
       poiClickListener?.remove();
       window.removeEventListener("sidewalk-google-auth-failure", handleAuthFailure);
     };
@@ -195,6 +125,43 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     };
   }, [context, walk, walks, onSelect]);
 
+  // In-app directions: dotted walking legs, rides in their line's color, you and the destination.
+  useEffect(() => {
+    if (!context || !directions) return;
+    const { map, maps } = context;
+    const overlays = [];
+    for (const segment of directions.segments ?? []) {
+      const path = segment.path.map(mapPoint);
+      if (path.length < 2) continue;
+      if (segment.kind === "transit") {
+        overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 11, clickable: false, zIndex: 2 }));
+        overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 7, clickable: false, zIndex: 3 }));
+      } else {
+        overlays.push(new maps.Polyline({
+          map, path, strokeOpacity: 0, clickable: false, zIndex: 4,
+          icons: [{ icon: { path: maps.SymbolPath.CIRCLE, scale: 3.2, fillColor: "#4B33C9", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 1.5 }, offset: "0", repeat: "11px" }],
+        }));
+      }
+    }
+    const markers = [
+      directions.origin && addMarker(context, { point: directions.origin, label: "Your location", className: "google-location", text: "", zIndex: 40 }),
+      addMarker(context, { point: directions.destination, label: directions.destinationName, className: "dir-dest-pin", text: "", zIndex: 41 }),
+    ].filter(Boolean);
+    return () => {
+      for (const line of overlays) line.setMap(null);
+      for (const marker of markers) marker.map = null;
+    };
+  }, [context, directions]);
+
+  // Frame the whole trip, or just the step the user tapped.
+  useEffect(() => {
+    if (!context || !directions) return;
+    const segment = directions.focus != null ? directions.segments?.[directions.focus] : null;
+    const points = segment?.path.length ? segment.path
+      : [...(directions.origin ? [directions.origin] : []), directions.destination, ...(directions.segments ?? []).flatMap(item => item.path)];
+    fitPoints(context, points);
+  }, [context, directions]);
+
   useEffect(() => {
     stops.current.forEach((marker, index) => marker.firstElementChild.classList.toggle("selected", selected === index));
   }, [context, walk, selected]);
@@ -211,9 +178,6 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, location, fol
     <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       onClick={() => setTransit(value => !value)}>T lines</button>
-    {(mapError || !context || locationStatus || placeStatus) && <div className="map-notice" role="status">{mapError || locationStatus || placeStatus || "Loading Google Maps…"}</div>}
-    {activePlace && <PlaceDetails key={activePlace.osm_id} place={activePlace} onClose={() => setActivePlace(null)}
-      onAddPlace={onAddPlace} addLabel={draftPlaces.some(place => place.osm_id === activePlace.osm_id)
-        ? "Already in your plan" : canAddPlace ? "Add to walk" : "Walk list unavailable"} />}
+    {(mapError || !context || locationStatus) && <div className="map-notice" role="status">{mapError || locationStatus || "Loading Google Maps…"}</div>}
   </section>;
 }

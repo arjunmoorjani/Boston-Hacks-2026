@@ -10,14 +10,13 @@ const point = place => [Number(place.latitude), Number(place.longitude)];
 const legMinutes = (a, b) => walkMinutes(...point(a), ...point(b));
 
 export function PlanEditor({ heading, title, onTitle, places, maxStops, onMove, onRemove, removed, onUndo,
-  onCancel, onSave, building, error, savingOuting, saveFeedback, onSaveOuting }) {
+  onCancel, onSave, building, error, savingOuting, saveFeedback }) {
   const legs = places.slice(1).map((place, index) => legMinutes(places[index], place));
   const totalWalk = legs.reduce((sum, min) => sum + min, 0);
   const full = places.length >= maxStops;
   const busy = building || savingOuting;
-  const canCalculate = places.length >= 2 && title.trim() && !busy;
+  const canSave = places.length >= 2 && title.trim() && !busy;
   const missingPlaceId = places.some(place => !place.placeId);
-  const canSaveOuting = places.length > 0 && title.trim() && !missingPlaceId && !busy;
 
   return <div className="plan-editor">
     <div className="plan-label">{heading}</div>
@@ -62,16 +61,13 @@ export function PlanEditor({ heading, title, onTitle, places, maxStops, onMove, 
 
     {error && <p className="editor-error" role="alert">{error}</p>}
 
-    {missingPlaceId && <p className="plan-meta">Replace stops without a Google Place ID to save this outing.</p>}
+    {missingPlaceId && <p className="plan-meta">Some stops aren’t Google places, so this plan will only be saved on this device.</p>}
     {saveFeedback && <p className={saveFeedback.error ? "editor-error" : "plan-meta"}
       role={saveFeedback.error ? "alert" : "status"}>{saveFeedback.message}</p>}
     <div className="plan-bar">
       <button type="button" className="plan-secondary" onClick={onCancel} disabled={busy}>Cancel</button>
-      <button type="button" className="plan-primary" onClick={onSave} disabled={!canCalculate}>
-        {building ? "Calculating…" : "Calculate route"}
-      </button>
-      <button type="button" className="plan-primary" onClick={onSaveOuting} disabled={!canSaveOuting}>
-        {savingOuting ? "Saving…" : "Save outing"}
+      <button type="button" className="plan-primary" onClick={onSave} disabled={!canSave}>
+        {savingOuting ? "Saving…" : building ? "Building route…" : places.length < 2 ? "Add at least 2 stops" : "Save plan"}
       </button>
     </div>
   </div>;
