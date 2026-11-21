@@ -17,6 +17,48 @@ a { color: inherit; }
 button:focus-visible, a:focus-visible, .map:focus-visible { outline: 3px solid #5839b5; outline-offset: 3px; }
 [hidden] { display: none !important; }
 
+.welcome {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 20% 0%, #fff0b8, transparent 56%), #f8f7f2;
+}
+.welcome-card {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 435px);
+  padding: clamp(24px, 6vw, 38px);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 18px 50px #21232012;
+}
+.welcome-card h1 { font-size: clamp(2rem, 8vw, 3rem); letter-spacing: -.06em; }
+.welcome-actions, .welcome-card fieldset { display: grid; gap: 10px; }
+.welcome-card fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.welcome-card label { display: grid; gap: 6px; font-weight: 700; }
+.welcome-card input {
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid #b9b9b0;
+  border-radius: 10px;
+}
+.welcome-card input:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.welcome-link { min-height: 44px; border: 0; background: transparent; font-weight: 700; color: var(--purple); }
+.welcome-confirmation { padding: 12px; border-radius: 10px; background: #fff3c7; line-height: 1.5; }
+.profile-account-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+.profile-account-actions .plan-primary, .profile-account-actions .plan-secondary {
+  flex: 0 1 auto;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: .85rem;
+}
+
 .shell { max-width: 1296px; margin: 0 auto; padding: env(safe-area-inset-top) 40px max(32px, env(safe-area-inset-bottom)); }
 .header { height: 81px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 9px; font-size: 29px; font-weight: 800; letter-spacing: -.07em; }
@@ -330,7 +372,8 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .profile-month { grid-area: month; } .profile-feed { grid-area: feed; } .profile-ranking { grid-area: ranking; }
 .profile-trophies { grid-area: trophies; } .profile-plans { grid-area: plans; } .profile-footer { grid-area: footer; }
 .profile-avatar .avatar { border-width: 4px; box-shadow: 0 0 0 5px #f8f7f2; }
-.profile-id h1 { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 1.9rem; letter-spacing: -.05em; line-height: 1.1; }
+.profile-name-heading { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 10px; }
+.profile-id h1 { font-size: 1.9rem; letter-spacing: -.05em; line-height: 1.1; overflow-wrap: anywhere; }
 .name-edit { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: #ecebe4; color: var(--muted); }
 .name-form input { margin-top: 10px; width: min(280px, 100%); padding: 6px 10px; text-align: center; font: inherit; font-size: 1.6rem; font-weight: 800; border: 1px solid #4B33C9; border-radius: 10px; }
 .profile-where { color: var(--muted); font-size: .9rem; margin-top: 2px; }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AuthGate } from "./auth-gate";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
@@ -14,7 +15,7 @@ import { watchUserLocation } from "../lib/location.mjs";
 import { saveOuting } from "../lib/save-outing.mjs";
 import { filterRoutesByCategory, loadRoutes, routesForMap } from "../lib/routes.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
-import { completionFor, emptyProfile, loadProfile, saveProfile } from "../lib/profile-store.mjs";
+import { completionFor, emptyProfile, guestDisplayName, loadProfile, saveProfile } from "../lib/profile-store.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -39,6 +40,11 @@ function legDistance(meters) {
 }
 
 export default function Home() {
+  return <AuthGate>{account => <Planner key={account.user?.id ?? "guest"} {...account}/>}</AuthGate>;
+}
+
+function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
+  const userId = user?.id;
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
   const [selectedWalkId, setSelectedWalkId] = useState(null);
@@ -51,6 +57,11 @@ export default function Home() {
   const [complete, setComplete] = useState(false);
   const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [accountName, setAccountName] = useState(null);
+  const [nameLoading, setNameLoading] = useState(Boolean(userId));
+  const [nameError, setNameError] = useState("");
+  const signupName = user?.user_metadata?.display_name;
+  const displayName = userId ? accountName || (typeof signupName === "string" && signupName.trim()) || "You" : guestDisplayName(profile.name);
   const [showProfile, setShowProfile] = useState(false);
   const [draftPlaces, setDraftPlaces] = useState([]);
   const [savingOuting, setSavingOuting] = useState(false);
@@ -111,13 +122,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setProfile(loadProfile()); // browser-only, so after the first render
+    const stored = loadProfile(userId);
+    setProfile(guestName === null ? stored : { ...stored, name: guestName });
     setProfileLoaded(true);
-  }, []);
+  }, [userId, guestName]);
   useEffect(() => {
-    if (profileLoaded) saveProfile(profile);
-  }, [profile, profileLoaded]);
+    if (profileLoaded) saveProfile(profile, userId);
+  }, [profile, profileLoaded, userId]);
   const updateProfile = change => setProfile(old => ({ ...old, ...(typeof change === "function" ? change(old) : change) }));
+
+  useEffect(() => {
+    if (!userId) return;
+    const controller = new AbortController();
+    async function loadName() {
+      try {
+        const { data, error } = await client.from("profiles").select("display_name")
+          .eq("id", userId).abortSignal(controller.signal).single();
+        if (error) throw error;
+        if (!controller.signal.aborted) setAccountName(data.display_name);
+      } catch {
+        if (!controller.signal.aborted) setNameError("Couldn’t load your account profile.");
+      } finally {
+        if (!controller.signal.aborted) setNameLoading(false);
+      }
+    }
+    loadName();
+    return () => controller.abort();
+  }, [client, userId]);
+
+  async function renameProfile(name) {
+    if (!userId) {
+      updateProfile({ name });
+      return;
+    }
+    const { data, error } = await client.from("profiles").update({ display_name: name })
+      .eq("id", userId).select("display_name").single();
+    if (error) throw error;
+    setAccountName(data.display_name);
+    setNameError("");
+  }
 
   useEffect(() => {
     if (!baseWalk || !googleMapsConfigured || baseWalk.source !== "routes.json" || routeResults[baseWalk.id]) {
@@ -413,7 +456,7 @@ export default function Home() {
       <div className="topbar-right">
         <div className="city"><span/> BOSTON, MA</div>
         <button type="button" className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Your profile">
-          <Avatar name={profile.name} size={34}/>
+          <Avatar name={displayName} size={34}/>
         </button>
       </div>
     </header>
@@ -492,8 +535,10 @@ export default function Home() {
             </fieldset>}
             onChange={index => openWalk(availableWalks[index].id)}/>}
     </section>
-    {showProfile && <ProfilePage profile={profile} walks={availableWalks} onClose={closeProfile}
-      onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
+    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={availableWalks} onClose={closeProfile}
+      onRename={renameProfile} nameLoading={nameLoading} nameError={nameError}
+      onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
+      onRank={ranking => updateProfile({ ranking })}
       onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
   </main>;
