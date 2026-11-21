@@ -4,15 +4,17 @@ import { useEffect, useState } from "react";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
-import { PlacesCatalog } from "./places-catalog";
-import { walks, walkStats } from "./walks";
+import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
+import { loadRoutes } from "../lib/routes.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
 
 export default function Home() {
+  const [walks, setWalks] = useState(fallbackWalks);
+  const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
   const [routeIndex, setRouteIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [following, setFollowing] = useState(false);
@@ -32,6 +34,19 @@ export default function Home() {
   const destination = walk.stops[step ?? selected ?? 0];
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${destination.point.join(",")}&travelmode=walking`;
   const transitDirections = `https://www.google.com/maps/dir/?api=1&destination=${walk.stops[0].point.join(",")}&travelmode=transit`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadRoutes({ signal: controller.signal }).then(routes => {
+      if (controller.signal.aborted) return;
+      setWalks(routes);
+      setRouteIndex(0);
+      setWalksStatus("");
+    }).catch(error => {
+      if (!controller.signal.aborted) setWalksStatus(`${error.message} Showing built-in walks.`);
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!following) return;
@@ -114,10 +129,13 @@ export default function Home() {
 
     <section className="intro" aria-labelledby="explore">
       <h1 id="explore">Explore Boston</h1>
-      <div className="routes" aria-label="Choose a walk">
-        {availableWalks.map((item, index) => <button key={item.id} type="button" aria-pressed={routeIndex === index} onClick={() => changeRoute(index)}>
-          <Icon name={item.symbol} size={17}/>{["Dessert crawl", "Harborwalk"][index] ?? item.title}
-        </button>)}
+      <div>
+        <div className="routes" aria-label="Choose a walk">
+          {availableWalks.map((item, index) => <button key={item.id} type="button" aria-pressed={routeIndex === index} onClick={() => changeRoute(index)}>
+            <Icon name={item.symbol} size={17}/>{item.title}
+          </button>)}
+        </div>
+        {walksStatus && <p className="routes-status" role="status">{walksStatus}</p>}
       </div>
     </section>
 
@@ -197,6 +215,5 @@ export default function Home() {
         </div>
       </section>
     </div>
-    <PlacesCatalog />
   </main>;
 }
