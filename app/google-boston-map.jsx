@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { Icon } from "./icons";
 
-function fitWalk({ map, maps }, walk) {
-  if (!walk?.path?.length) return;
+function fitWalks({ map, maps }, walks) {
+  const visible = walks.filter(walk => walk?.path?.length);
+  if (!visible.length) return;
   const bounds = new maps.LatLngBounds();
-  for (const point of walk.path) bounds.extend(mapPoint(point));
-  for (const stop of walk.stops) bounds.extend(mapPoint(stop.point));
+  for (const walk of visible) {
+    for (const point of walk.path) bounds.extend(mapPoint(point));
+    for (const stop of walk.stops) bounds.extend(mapPoint(stop.point));
+  }
   map.fitBounds(bounds, { top: 74, left: 42, right: 64, bottom: 64 });
 }
 
@@ -81,7 +84,7 @@ function PlaceDetails({ place, onClose, onAddPlace, addLabel }) {
   </dialog>;
 }
 
-export function GoogleBostonMap({ walk, selected, onSelect, location, locate, following, locationStatus, onAddPlace, draftPlaces, canAddPlace }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, location, locate, following, locationStatus, onAddPlace, draftPlaces, canAddPlace }) {
   const container = useRef(null);
   const stops = useRef([]);
   const [context, setContext] = useState(null);
@@ -170,21 +173,25 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
   useEffect(() => {
     if (!context) return;
     const { map, maps } = context;
-    const path = walk.path.map(mapPoint);
-    const outline = new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 10, clickable: false });
-    const line = new maps.Polyline({ map, path, strokeColor: "#5839b5", strokeWeight: 6, clickable: false, zIndex: 1 });
+    const lines = walks.flatMap(item => {
+      const path = item.path.map(mapPoint);
+      if (!path.length) return [];
+      return [
+        new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: walk.path.length ? 10 : 7, clickable: false }),
+        new maps.Polyline({ map, path, strokeColor: "#5839b5", strokeWeight: walk.path.length ? 6 : 4, clickable: false, zIndex: 1 }),
+      ];
+    });
     stops.current = walk.stops.map((stop, index) => addMarker(context, {
       point: stop.point, label: `Stop ${index + 1}: ${stop.name}`, onClick: () => onSelect(index),
       className: "google-pin", text: String(index + 1), zIndex: 30,
     }));
-    fitWalk(context, walk);
+    fitWalks(context, walks);
     return () => {
-      outline.setMap(null);
-      line.setMap(null);
+      for (const line of lines) line.setMap(null);
       for (const marker of stops.current) marker.map = null;
       stops.current = [];
     };
-  }, [context, walk, onSelect]);
+  }, [context, walk, walks, onSelect]);
 
   useEffect(() => {
     stops.current.forEach((marker, index) => marker.firstElementChild.classList.toggle("selected", selected === index));
@@ -199,14 +206,14 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
 
   return <section className="map google-map" aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
-    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : "Boston"}</div>
+    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : walks.length ? `${walks.length} walks · Boston` : "Boston"}</div>
     <div className="map-controls">
       <div className="control-group">
         <button aria-label="Zoom in" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() + 1)}><Icon name="plus"/></button>
         <button aria-label="Zoom out" disabled={!context} onClick={() => context.map.setZoom(context.map.getZoom() - 1)}><Icon name="minus"/></button>
       </div>
       <div className="control-group">
-        <button aria-label="Fit route on map" disabled={!context || !walk.path.length} onClick={() => fitWalk(context, walk)}><Icon name="fit"/></button>
+        <button aria-label="Fit routes on map" disabled={!context || !walks.some(item => item.path.length)} onClick={() => fitWalks(context, walks)}><Icon name="fit"/></button>
         <button aria-label={following ? "Stop location tracking" : "Show my location"}
           title={following ? "Stop location tracking" : "Show my location"}
           aria-pressed={following} onClick={locate}><Icon name="locate"/></button>

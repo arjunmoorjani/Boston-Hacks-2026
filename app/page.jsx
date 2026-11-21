@@ -7,7 +7,7 @@ import { Icon } from "./icons";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildTripToStart, buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
-import { filterRoutesByCategory, loadRoutes } from "../lib/routes.mjs";
+import { filterRoutesByCategory, loadRoutes, routesForMap } from "../lib/routes.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -33,7 +33,7 @@ function legDistance(meters) {
 export default function Home() {
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
-  const [selectedWalkId, setSelectedWalkId] = useState(fallbackWalks[0]?.id ?? null);
+  const [selectedWalkId, setSelectedWalkId] = useState(null);
   const [disabledCategories, setDisabledCategories] = useState([]);
   const [selected, setSelected] = useState(null);
   const [following, setFollowing] = useState(false);
@@ -59,6 +59,7 @@ export default function Home() {
   const availableWalks = customWalk ? [...filteredWalks, customWalk] : filteredWalks;
   const baseWalk = availableWalks.find(item => item.id === selectedWalkId) ?? null;
   const walk = baseWalk && routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
+  const mapWalks = routesForMap(availableWalks, selectedWalkId, routeResults);
   const stats = walk ? walkStats(walk) : null;
   const stop = walk && selected !== null ? walk.stops[selected] : null;
   const destination = walk ? walk.stops[step ?? selected ?? 0] : null;
@@ -73,7 +74,7 @@ export default function Home() {
       setWalks(routes);
       setRouteResults({});
       setDisabledCategories([]);
-      setSelectedWalkId(routes[0]?.id ?? null);
+      setSelectedWalkId(null);
       setWalksStatus("");
     }).catch(error => {
       if (!controller.signal.aborted) setWalksStatus(`${error.message} Showing built-in walks.`);
@@ -163,7 +164,7 @@ export default function Home() {
   }
 
   function changeRoute(id) {
-    setSelectedWalkId(id);
+    setSelectedWalkId(current => current === id ? null : id);
     resetWalkInteraction();
   }
 
@@ -268,7 +269,7 @@ export default function Home() {
 
     <div className="experience">
       <div className="map-panel">
-      <MapView walk={walk ?? emptyWalk} selected={selected} onSelect={setSelected} location={following ? location : null}
+      <MapView walk={walk ?? emptyWalk} walks={mapWalks} selected={selected} onSelect={setSelected} location={following ? location : null}
         draftPlaces={draftPlaces} onAddPlace={addPlace} canAddPlace={!building && draftPlaces.length < maxStops}
         following={following} locationStatus={locationStatus}
         locate={() => {

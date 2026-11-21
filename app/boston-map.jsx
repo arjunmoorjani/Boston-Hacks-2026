@@ -27,7 +27,7 @@ function Tile({ tile, onLoad, onFail }) {
   />;
 }
 
-export function BostonMap({ walk, selected, onSelect, location, locate, following, locationStatus }) {
+export function BostonMap({ walk, walks, selected, onSelect, location, locate, following, locationStatus }) {
   const element = useRef(null);
   const lastFit = useRef("");
   const pointers = useRef(new Map());
@@ -47,11 +47,13 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
   }, []);
 
   useEffect(() => {
-    if (size.width && walk.path.length && lastFit.current !== walk.id) {
-      lastFit.current = walk.id;
-      setView(fitRoute(walk.path, size));
+    const fitKey = walks.map(item => item.id).join("|");
+    const path = walks.flatMap(item => item.path);
+    if (size.width && path.length && lastFit.current !== fitKey) {
+      lastFit.current = fitKey;
+      setView(fitRoute(path, size));
     }
-  }, [size, walk]);
+  }, [size, walks]);
 
   useEffect(() => {
     if (following && location) setView(old => ({ ...old, center: location }));
@@ -122,7 +124,8 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
     const [x, y] = project(point, view.zoom);
     return [x - left, y - top];
   };
-  const route = walk.path.map(screen).map(point => point.join(",")).join(" ");
+  const routes = walks.map(item => item.path.map(screen).map(point => point.join(",")).join(" "));
+  const allPath = walks.flatMap(item => item.path);
   const gps = location && screen(location);
 
   return <section
@@ -141,8 +144,10 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
       {tiles.map(tile => <Tile key={tile.key} tile={tile} onLoad={() => setLoadedTile(true)} onFail={() => setFailedTile(true)} />)}
     </div>
     <svg className="route-layer" width="100%" height="100%" aria-hidden="true">
-      <polyline points={route} fill="none" stroke="#fff" strokeWidth="10" strokeLinejoin="round" strokeLinecap="round"/>
-      <polyline points={route} fill="none" stroke="#5839b5" strokeWidth="6" strokeLinejoin="round" strokeLinecap="round"/>
+      {routes.map((route, index) => <g key={walks[index].id}>
+        <polyline points={route} fill="none" stroke="#fff" strokeWidth={walk.path.length ? 10 : 7} strokeLinejoin="round" strokeLinecap="round"/>
+        <polyline points={route} fill="none" stroke="#5839b5" strokeWidth={walk.path.length ? 6 : 4} strokeLinejoin="round" strokeLinecap="round"/>
+      </g>)}
     </svg>
     {gps && <span className="gps" style={{ left: gps[0], top: gps[1] }} title="Your location" />}
     {walk.stops.map((stop, index) => {
@@ -152,14 +157,14 @@ export function BostonMap({ walk, selected, onSelect, location, locate, followin
         style={{ left: x, top: y }} onClick={() => onSelect(index)}
         aria-label={`Stop ${index + 1}: ${stop.name}`} aria-pressed={selected === index}>{index + 1}</button>;
     })}
-    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : "Boston"}</div>
+    <div className="map-label"><span className="map-label-dot"/> {walk.area ? `${walk.area}, Boston` : walks.length ? `${walks.length} walks · Boston` : "Boston"}</div>
     <div className="map-controls" data-map-ui>
       <div className="control-group">
         <button aria-label="Zoom in" onClick={() => setView(old => zoomAt(old, 1))}><Icon name="plus"/></button>
         <button aria-label="Zoom out" onClick={() => setView(old => zoomAt(old, -1))}><Icon name="minus"/></button>
       </div>
       <div className="control-group">
-        <button aria-label="Fit route on map" disabled={!walk.path.length} onClick={() => setView(fitRoute(walk.path, size))}><Icon name="fit"/></button>
+        <button aria-label="Fit routes on map" disabled={!allPath.length} onClick={() => setView(fitRoute(allPath, size))}><Icon name="fit"/></button>
         <button aria-label="Show my location" aria-pressed={following} onClick={locate}><Icon name="locate"/></button>
       </div>
     </div>
