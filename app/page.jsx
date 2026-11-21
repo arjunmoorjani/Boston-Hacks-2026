@@ -7,6 +7,7 @@ import { Icon } from "./icons";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
+import { saveOuting } from "../lib/save-outing.mjs";
 import { loadRoutes } from "../lib/routes.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
@@ -25,6 +26,9 @@ export default function Home() {
   const [complete, setComplete] = useState(false);
   const [customWalk, setCustomWalk] = useState(null);
   const [draftPlaces, setDraftPlaces] = useState([]);
+  const [outingName, setOutingName] = useState("");
+  const [savingOuting, setSavingOuting] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState(null);
   const [building, setBuilding] = useState(false);
   const [routeError, setRouteError] = useState("");
   const availableWalks = customWalk ? [...walks, customWalk] : walks;
@@ -92,10 +96,26 @@ export default function Home() {
   }
 
   function addPlace(place) {
-    if (building) return;
+    if (building || savingOuting) return;
     setDraftPlaces(items => items.length >= maxStops || items.some(item => item.osm_id === place.osm_id)
       ? items : [...items, place]);
     setRouteError("");
+  }
+
+  async function handleSaveOuting(event) {
+    event.preventDefault();
+    if (savingOuting || !outingName.trim() || !draftPlaces.length) return;
+
+    setSavingOuting(true);
+    setSaveFeedback(null);
+    try {
+      await saveOuting(outingName, draftPlaces.map(stop => stop.placeId));
+      setSaveFeedback({ message: "Outing saved." });
+    } catch (error) {
+      setSaveFeedback({ error: true, message: error?.message || "Couldn’t save the outing." });
+    } finally {
+      setSavingOuting(false);
+    }
   }
 
   async function createWalk() {
@@ -142,7 +162,7 @@ export default function Home() {
     <div className="experience">
       <div className="map-panel">
       <MapView walk={walk} selected={selected} onSelect={setSelected} location={following ? location : null}
-        draftPlaces={draftPlaces} onAddPlace={addPlace} canAddPlace={!building && draftPlaces.length < maxStops}
+        draftPlaces={draftPlaces} onAddPlace={addPlace} canAddPlace={!building && !savingOuting && draftPlaces.length < maxStops}
         following={following} locationStatus={locationStatus}
         locate={() => {
           if (following) {
@@ -151,17 +171,28 @@ export default function Home() {
           }
           setFollowing(!following);
         }} />
-      {googleMapsConfigured && draftPlaces.length > 0 && <section className="sheet draft-walk" aria-labelledby="draft-walk-title">
+      {googleMapsConfigured && <section className="sheet draft-walk" aria-labelledby="draft-walk-title">
         <h3 id="draft-walk-title">Build a walk</h3>
         <ol>{draftPlaces.map(place => <li key={place.osm_id}>
           <span>{place.name}</span>
-          <button className="plain-button" aria-label={`Remove ${place.name}`} disabled={building}
+          <button className="plain-button" aria-label={`Remove ${place.name}`} disabled={building || savingOuting}
             onClick={() => setDraftPlaces(items => items.filter(item => item.osm_id !== place.osm_id))}><Icon name="close" size={17}/></button>
         </li>)}</ol>
         {routeError && <p role="alert">{routeError}</p>}
         <button className="primary" type="button" disabled={draftPlaces.length < 2 || building} onClick={createWalk}>
           {building ? "Calculating…" : "Calculate walking route"}
         </button>
+        <form className="save-outing" onSubmit={handleSaveOuting}>
+          <label htmlFor="outing-name">Outing name</label>
+          <input id="outing-name" value={outingName} onChange={event => setOutingName(event.target.value)}
+            required disabled={savingOuting} />
+          <button className="primary" type="submit"
+            disabled={savingOuting || !outingName.trim() || !draftPlaces.length}>
+            {savingOuting ? "Saving…" : "Save outing"}
+          </button>
+          <p role="status">{saveFeedback && !saveFeedback.error ? saveFeedback.message : ""}</p>
+          <p role="alert">{saveFeedback?.error ? saveFeedback.message : ""}</p>
+        </form>
       </section>}
       </div>
 
