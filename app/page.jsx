@@ -12,6 +12,23 @@ import { loadRoutes } from "../lib/routes.mjs";
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
 
+function fullWalkDirections(walk) {
+  const points = walk.stops.map(stop => stop.point.join(","));
+  const params = new URLSearchParams({
+    api: "1",
+    origin: points[0],
+    destination: points.at(-1),
+    travelmode: "walking",
+  });
+  if (points.length > 2) params.set("waypoints", points.slice(1, -1).join("|"));
+  return `https://www.google.com/maps/dir/?${params}`;
+}
+
+function legDistance(meters) {
+  if (!Number.isFinite(meters)) return "";
+  return `${(meters / 1609.344).toFixed(1)} mi`;
+}
+
 export default function Home() {
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
@@ -27,19 +44,24 @@ export default function Home() {
   const [draftPlaces, setDraftPlaces] = useState([]);
   const [building, setBuilding] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [routeResults, setRouteResults] = useState({});
+  const [routeStatus, setRouteStatus] = useState("");
   const availableWalks = customWalk ? [...walks, customWalk] : walks;
-  const walk = availableWalks[routeIndex];
+  const baseWalk = availableWalks[routeIndex] ?? availableWalks[0];
+  const walk = routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
   const stats = walkStats(walk);
   const stop = selected === null ? null : walk.stops[selected];
   const destination = walk.stops[step ?? selected ?? 0];
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${destination.point.join(",")}&travelmode=walking`;
   const transitDirections = `https://www.google.com/maps/dir/?api=1&destination=${walk.stops[0].point.join(",")}&travelmode=transit`;
+  const walkDirections = fullWalkDirections(walk);
 
   useEffect(() => {
     const controller = new AbortController();
     loadRoutes({ signal: controller.signal }).then(routes => {
       if (controller.signal.aborted) return;
       setWalks(routes);
+      setRouteResults({});
       setRouteIndex(0);
       setWalksStatus("");
     }).catch(error => {
@@ -47,6 +69,24 @@ export default function Home() {
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!googleMapsConfigured || baseWalk.source !== "routes.json" || routeResults[baseWalk.id]) {
+      setRouteStatus("");
+      return;
+    }
+
+    let active = true;
+    setRouteStatus("Calculating the walking route…");
+    buildWalkingRoute(baseWalk.stops).then(route => {
+      if (!active) return;
+      setRouteResults(results => ({ ...results, [baseWalk.id]: route }));
+      setRouteStatus("");
+    }).catch(() => {
+      if (active) setRouteStatus("Couldn’t calculate this walking route. Check that Routes API is enabled.");
+    });
+    return () => { active = false; };
+  }, [baseWalk, routeResults]);
 
   useEffect(() => {
     if (!following) return;
@@ -174,9 +214,8 @@ export default function Home() {
           <span><span className="stats-pin"/>{walk.stops.length} stops</span>
         </div>
         <p className="description">{walk.description}</p>
-        {walk.warnings && <p className="route-warning">
-          {walk.warnings.length ? walk.warnings.join(" ") : "Walking directions may lack sidewalks or pedestrian paths."}
-        </p>}
+        {routeStatus && <p className="route-status" role="status">{routeStatus}</p>}
+        {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
 
         {step !== null && <div className="walk-progress" role="status">
           <span>Stop {step + 1} of {walk.stops.length}</span>
@@ -203,6 +242,22 @@ export default function Home() {
           </li>)}
         </ol>
 
+        {walk.legs?.length > 0 && <section className="route-directions" aria-labelledby="route-directions-title">
+          <h3 id="route-directions-title">Walking directions</h3>
+          {walk.legs.map((leg, index) => <details key={`${walk.id}-leg-${index}`}>
+            <summary>
+              <span><strong>{walk.stops[index]?.name}</strong> to <strong>{walk.stops[index + 1]?.name}</strong></span>
+              <small>{legDistance(leg.meters)} · {Math.max(1, Math.round(leg.minutes))} min</small>
+            </summary>
+            {leg.steps.length > 0
+              ? <ol>{leg.steps.map((routeStep, stepIndex) => <li key={`${routeStep.instruction}-${stepIndex}`}>
+                  <span>{routeStep.instruction}</span>
+                  {routeStep.meters > 0 && <small>{legDistance(routeStep.meters)}</small>}
+                </li>)}</ol>
+              : <p>No step details returned.</p>}
+          </details>)}
+        </section>}
+
         <div className="actions">
           <button className="primary" onClick={advance}>
             {step === null ? complete ? "Walk again" : "Start walk" : step === walk.stops.length - 1 ? "Finish walk" : "Mark stop visited"}
@@ -211,6 +266,7 @@ export default function Home() {
           {step === null
             ? <a href={directions} target="_blank" rel="noreferrer">Directions to {selected === null ? "start" : "this stop"} <Icon name="external" size={15}/></a>
             : <button className="cancel" onClick={() => { setStep(null); setSelected(null); }}>End walk</button>}
+          {step === null && <a href={walkDirections} target="_blank" rel="noreferrer">Open full walk in Google Maps <Icon name="external" size={15}/></a>}
           {step === null && <a href={transitDirections} target="_blank" rel="noreferrer">Take the T to the start <Icon name="external" size={15}/></a>}
         </div>
       </section>
