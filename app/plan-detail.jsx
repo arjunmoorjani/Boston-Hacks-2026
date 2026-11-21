@@ -20,7 +20,9 @@ function reasonFor(route) {
     ?? reasons.find(reason => !reason.endsWith("min walk")) ?? "Nearby";
 }
 
-export function PlanDetail({ walk, stats, suggestData, step, complete, selected, directions, transitDirections,
+const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
+
+export function PlanDetail({ walk, stats, suggestData, step, complete, selected, onDirections,
   onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
@@ -49,7 +51,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
     {walking && <div className="walk-progress" role="status">
       <span>Stop {step + 1} of {walk.stops.length}</span>
       <strong>{walk.stops[step].name}</strong>
-      <a href={directions} target="_blank" rel="noreferrer">Directions <Icon name="external" size={14}/></a>
+      <button type="button" className="inline-link" onClick={() => onDirections(stopTarget(walk.stops[step]))}><Icon name="walk" size={14}/>Directions</button>
     </div>}
     {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
     {rankSlot}
@@ -61,7 +63,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
         <strong>{lines.length ? `${lines.map(line => line.id).join(" / ")} Line at ${walk.tStation}` : walk.tStation}</strong>
       </div>
       <p>Nearest T stop to the start. Live train times aren’t connected in this prototype.</p>
-      <a href={transitDirections} target="_blank" rel="noreferrer" className="t-card-link">Transit directions to the start <Icon name="external" size={14}/></a>
+      <button type="button" className="t-card-link inline-link" onClick={() => onDirections(stopTarget(walk.stops[0]), "TRANSIT")}><Icon name="train" size={14}/>Directions by T to the start</button>
     </section>}
 
     <ol className="plan-stops">
