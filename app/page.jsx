@@ -5,7 +5,7 @@ import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
 import { Icon } from "./icons";
 import { walks as fallbackWalks, walkStats } from "./walks";
-import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
+import { buildTripToStart, buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { watchUserLocation } from "../lib/location.mjs";
 import { loadRoutes } from "../lib/routes.mjs";
 
@@ -46,6 +46,12 @@ export default function Home() {
   const [routeError, setRouteError] = useState("");
   const [routeResults, setRouteResults] = useState({});
   const [routeStatus, setRouteStatus] = useState("");
+  const [toStartMode, setToStartMode] = useState("WALKING");
+  const [pendingToStart, setPendingToStart] = useState(null);
+  const [toStartRequest, setToStartRequest] = useState(null);
+  const [toStartEstimate, setToStartEstimate] = useState(null);
+  const [toStartStatus, setToStartStatus] = useState("");
+  const [toStartLoading, setToStartLoading] = useState(false);
   const availableWalks = customWalk ? [...walks, customWalk] : walks;
   const baseWalk = availableWalks[routeIndex] ?? availableWalks[0];
   const walk = routeResults[baseWalk.id] ? { ...baseWalk, ...routeResults[baseWalk.id] } : baseWalk;
@@ -89,6 +95,31 @@ export default function Home() {
   }, [baseWalk, routeResults]);
 
   useEffect(() => {
+    if (!pendingToStart || !location) return;
+    setToStartRequest({ ...pendingToStart, origin: [...location] });
+    setPendingToStart(null);
+  }, [pendingToStart, location]);
+
+  useEffect(() => {
+    if (!toStartRequest) return;
+    let active = true;
+    setToStartLoading(true);
+    setToStartStatus(`Calculating ${toStartRequest.travelMode === "TRANSIT" ? "transit" : "walking"} time to the start…`);
+    buildTripToStart(toStartRequest.origin, toStartRequest.destination, toStartRequest.travelMode).then(estimate => {
+      if (!active) return;
+      setToStartEstimate(estimate);
+      setToStartStatus("");
+      setToStartLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setToStartEstimate(null);
+      setToStartStatus("Couldn’t calculate travel to the start. Try the other mode.");
+      setToStartLoading(false);
+    });
+    return () => { active = false; };
+  }, [toStartRequest]);
+
+  useEffect(() => {
     if (!following) return;
     if (!window.isSecureContext || !navigator.geolocation) {
       setLocationStatus("Location needs a secure connection (HTTPS) or localhost.");
@@ -103,6 +134,9 @@ export default function Home() {
       },
       onError: message => {
         setLocationStatus(message);
+        setPendingToStart(null);
+        setToStartStatus(message);
+        setToStartLoading(false);
         setFollowing(false);
       },
     });
@@ -115,7 +149,31 @@ export default function Home() {
     setComplete(false);
     setExpanded(false);
     setFollowing(false);
+    setLocation(null);
     setLocationStatus("");
+    setPendingToStart(null);
+    setToStartRequest(null);
+    setToStartEstimate(null);
+    setToStartStatus("");
+    setToStartLoading(false);
+  }
+
+  function requestTripToStart() {
+    const request = {
+      destination: [...walk.stops[0].point],
+      travelMode: toStartMode,
+      walkId: walk.id,
+      requestId: Date.now(),
+    };
+    setToStartEstimate(null);
+    setToStartLoading(true);
+    if (!location) {
+      setPendingToStart(request);
+      setToStartStatus("Finding your location…");
+      setFollowing(true);
+      return;
+    }
+    setToStartRequest({ ...request, origin: [...location] });
   }
 
   function advance() {
@@ -210,12 +268,33 @@ export default function Home() {
         <h2 id="walk-title">{walk.title}</h2>
         <div className="stats">
           <span><Icon name="route" size={16}/>{stats.miles} mi</span>
-          <span><Icon name="clock" size={16}/>~{stats.minutes} min</span>
+          <span><Icon name="clock" size={16}/>Within walk · ~{stats.minutes} min</span>
           <span><span className="stats-pin"/>{walk.stops.length} stops</span>
         </div>
         <p className="description">{walk.description}</p>
         {routeStatus && <p className="route-status" role="status">{routeStatus}</p>}
         {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
+
+        <section className="to-start" aria-labelledby="to-start-title">
+          <div className="to-start-heading">
+            <h3 id="to-start-title">Get to start</h3>
+            <div className="travel-modes" role="group" aria-label="Travel mode to the start">
+              {["WALKING", "TRANSIT"].map(mode => <button key={mode} type="button"
+                aria-pressed={toStartMode === mode} onClick={() => {
+                  setToStartMode(mode);
+                  setToStartEstimate(null);
+                  setToStartStatus("");
+                }}>{mode === "WALKING" ? "Walk" : "Transit"}</button>)}
+            </div>
+          </div>
+          <button className="catalog-button" type="button" disabled={toStartLoading || !googleMapsConfigured}
+            onClick={requestTripToStart}>{toStartLoading ? "Calculating…" : "Get travel time"}</button>
+          {toStartStatus && <p role="status">{toStartStatus}</p>}
+          {toStartEstimate && <p className="to-start-result" role="status">
+            <strong>{Math.max(1, Math.round(toStartEstimate.minutes))} min to start</strong>
+            <span>{toStartEstimate.travelMode === "TRANSIT" ? "Transit" : "Walk"} · {legDistance(toStartEstimate.meters)}</span>
+          </p>}
+        </section>
 
         {step !== null && <div className="walk-progress" role="status">
           <span>Stop {step + 1} of {walk.stops.length}</span>
