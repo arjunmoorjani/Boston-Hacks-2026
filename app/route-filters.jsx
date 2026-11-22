@@ -25,6 +25,10 @@ export function RouteFilters({ filters, onChange, counts }) {
     </div>
 
     <div className="chip-row" role="group" aria-label="Category">
+      <button type="button" className={`chip filter-toggle ${inPanel ? "active" : ""}`} aria-expanded={open} aria-controls="filter-panel" onClick={() => setOpen(value => !value)}>
+        <Icon name="sliders" size={16}/>Filters{inPanel > 0 && <span className="filter-badge">{inPanel}</span>}
+        <Icon name={open ? "chevronUp" : "chevronDown"} size={15}/>
+      </button>
       <button type="button" className="chip" aria-pressed={!filters.categories.length} onClick={() => onChange(f => ({ ...f, categories: [] }))}>All</button>
       {CATEGORIES.map(category => <button key={category} type="button" className="chip" aria-pressed={filters.categories.includes(category)}
         disabled={!counts[category] && !filters.categories.includes(category)}
@@ -33,17 +37,13 @@ export function RouteFilters({ filters, onChange, counts }) {
       </button>)}
     </div>
 
-    <div className="filter-actions">
-      <button type="button" className={`filter-toggle ${inPanel ? "active" : ""}`} aria-expanded={open} aria-controls="filter-panel" onClick={() => setOpen(value => !value)}>
-        <Icon name="sliders" size={16}/>Filters{inPanel > 0 && <span className="filter-badge">{inPanel}</span>}
-        <Icon name={open ? "chevronUp" : "chevronDown"} size={15}/>
-      </button>
+    {anyActive(filters) && <div className="filter-actions">
       {chips.map(chip => <button key={`${chip.group}:${chip.value}`} type="button" className="active-chip"
         aria-label={`Remove filter ${chip.label}`} onClick={() => onChange(f => toggleOption(f, chip.group, chip.value))}>
         {chip.group === "line" && <span className="line-dot" style={{ background: lineColor(chip.value) }}/>}{chip.label}<Icon name="close" size={13}/>
       </button>)}
-      {anyActive(filters) && <button type="button" className="clear-filters" onClick={() => onChange(emptyFilters)}>Clear all</button>}
-    </div>
+      <button type="button" className="clear-filters" onClick={() => onChange(emptyFilters)}>Clear all</button>
+    </div>}
 
     <div className="filter-panel" id="filter-panel" hidden={!open}>
       {FILTER_GROUPS.map(group => <fieldset key={group.id}>

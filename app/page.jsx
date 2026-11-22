@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MapIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { MapIcon, PlusSignIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { AuthGate } from "./auth-gate";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
@@ -798,7 +798,9 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
         <HugeiconsIcon icon={MapIcon} size={24}/>
       </button>
       <button type="button" className="bottom-nav-log" aria-label="Log" aria-current={showLog ? "page" : undefined}
-        onClick={() => { setShowProfile(false); setShowLog(true); }}/>
+        onClick={() => { setShowProfile(false); setShowLog(true); }}>
+        <HugeiconsIcon icon={PlusSignIcon} size={26} strokeWidth={2.4}/>
+      </button>
       <button type="button" className="bottom-nav-button" aria-label="Profile" aria-current={showProfile ? "page" : undefined}
         onClick={() => { setShowLog(false); setShowProfile(true); }}>
         <HugeiconsIcon icon={UserIcon} size={24}/>

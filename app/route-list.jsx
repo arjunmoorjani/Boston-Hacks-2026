@@ -3,6 +3,9 @@
 // "More walks" list inside the bottom sheet: T line and tag filters, one card per walk.
 
 import { Icon } from "./icons";
+import { useEffect, useRef, useState } from "react";
+import { fetchPlacePhoto } from "../lib/place-profile.mjs";
+import { sketchRoute } from "../lib/route-sketch.mjs";
 
 export const LINES = [
   { id: "Red", color: "#DA291C" },
@@ -73,6 +76,8 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
         const tLine = lineInfo(walk.tLines?.[0]);
         return <li key={walk.id}>
           <button type="button" className="route-card" aria-pressed={walk.id === selectedId} onClick={() => onOpen(walk.id)}>
+            <CardPhoto walk={walk} favorite={favoriteIds.has(walk.id)}/>
+            <span className="route-card-body">
             <span className="route-card-title">{walk.title}
               {favoriteIds.has(walk.id) && <svg className="route-card-heart" width="15" height="15" viewBox="0 0 24 24" aria-label="Favorite">
                 <path d="M12 20.5s-7.5-4.6-7.5-10.6A4.4 4.4 0 0 1 12 7.1a4.4 4.4 0 0 1 7.5 2.8c0 6-7.5 10.6-7.5 10.6z" fill="currentColor"/></svg>}
@@ -81,6 +86,7 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
             {walk.tStation && <span className="t-chip" style={{ background: tLine?.color ?? "#575b53", color: tLine?.darkText ? "#212320" : "#fff" }}>
               <Icon name="train" size={14}/>{walk.tStation}
             </span>}
+            </span>
           </button>
         </li>;
       })}
@@ -89,4 +95,51 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
     {!walks.length && !(tab === "favorites" && !filtered) && <p className="route-empty">{filtered ? "No walks match these filters." : "No walks yet."}
       {filtered && <button type="button" className="cancel" onClick={onClear}>Clear filters</button>}</p>}
   </section>;
+}
+
+// The walk's shape on a small square (a drawing, not a map: 40 cards would mean 40 Google maps).
+function RouteSketch({ walk, favorite }) {
+  const sketch = sketchRoute(walk.path, walk.stops ?? []);
+  return <svg className={`route-sketch${favorite ? " is-favorite" : ""}`} viewBox="0 0 72 72" aria-hidden="true">
+    {sketch && <>
+      <path d={sketch.d} className="route-sketch-casing"/>
+      <path d={sketch.d} className="route-sketch-line"/>
+      {sketch.stops.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3.6" className="route-sketch-stop"/>)}
+    </>}
+  </svg>;
+}
+
+// A photo of the walk's first stop that has one (from Google Places), loaded when the card scrolls into view.
+// Until it loads, or if no stop has a photo, the card shows the route drawing instead.
+function CardPhoto({ walk, favorite }) {
+  const box = useRef(null);
+  const [photo, setPhoto] = useState(null);
+  const placeIds = (walk.stops ?? []).map(stop => stop.placeId).filter(Boolean);
+  const key = placeIds.join(",");
+
+  useEffect(() => {
+    setPhoto(null);
+    if (!placeIds.length || !box.current) return;
+    let active = true;
+    const observer = new IntersectionObserver(async entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      for (const placeId of placeIds.slice(0, 3)) { // first stop with a photo (most have one)
+        try {
+          const found = await fetchPlacePhoto(placeId);
+          if (found) { if (active) setPhoto(found); return; }
+        } catch { return; }
+      }
+    }, { rootMargin: "200px" });
+    observer.observe(box.current);
+    return () => { active = false; observer.disconnect(); };
+  }, [key]);
+
+  return <span className="route-card-media" ref={box}>
+    {photo ? <>
+      {/* no referrerPolicy: Google checks the referrer against the key's website restrictions */}
+      <img className="route-card-photo" src={photo.src} alt="" loading="lazy" onError={() => setPhoto(null)}/>
+      {photo.author && <span className="route-card-credit">{photo.author.name}</span>}
+    </> : <RouteSketch walk={walk} favorite={favorite}/>}
+  </span>;
 }

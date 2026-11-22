@@ -73,7 +73,7 @@ function PlaceField({ fieldId, location, number, onChange }) {
   </div>;
 }
 
-function RouteBuilderMap({ locationNumber, locations, route, onPick }) {
+function RouteBuilderMap({ locationNumber, locations, current, route, onPick }) {
   const selected = locations.filter(location => location.point);
   const stops = selected.map((location, index) => ({
     id: location.placeId ? `google:${location.placeId}` : `log-stop:${index}`,
@@ -116,7 +116,9 @@ function RouteBuilderMap({ locationNumber, locations, route, onPick }) {
 
   const status = route.status === "building" ? "Building the excursion route…"
     : route.status === "error" ? route.error
-    : route.path.length ? "Excursion route updated." : `Tap a place or anywhere on the map to choose location ${locationNumber}.`;
+    : route.path.length ? "Excursion route updated."
+    : current?.point ? `Tap another place to change location ${locationNumber}.`
+    : `Tap a place or anywhere on the map to choose location ${locationNumber}.`;
 
   return <>
     <div className="log-start-map">
@@ -135,7 +137,7 @@ function ExcursionStopPicker({ fieldId, label, stop, number, onChange }) {
     <p className="log-map-prompt">Or pick location {number} on the map</p>
     {stop.point && !stop.placeId &&
       <p className="log-map-status">Choose a searchable place or address to save this stop.</p>}
-    <RouteBuilderMap locationNumber={number} locations={[stop]} route={EMPTY_ROUTE} onPick={onChange}/>
+    <RouteBuilderMap locationNumber={number} locations={[stop]} current={stop} route={EMPTY_ROUTE} onPick={onChange}/>
   </>;
 }
 
@@ -540,7 +542,7 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
     <button type="button" className="log-form-back" onClick={onBack} aria-label="Back to excursion options">← Back</button>
     <div className="log-form-content">
       <div className="log-form-section">
-        <label id="previous-excursion-title" htmlFor="excursion-name">name your excursion</label>
+        <label id="previous-excursion-title" htmlFor="excursion-name">Name your excursion</label>
         <input id="excursion-name" type="text" value={name} onChange={event => setName(event.target.value)}
           placeholder="Example: Saturday in the North End" autoComplete="off"/>
       </div>
@@ -560,7 +562,7 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
             </div>
           </div>}
           <div className="log-location-heading">
-            <label htmlFor={fieldId}>{number}. {index === 0 ? "where did you start?" : "where did you go next?"}</label>
+            <label htmlFor={fieldId}>{number}. {index === 0 ? "Where did you start?" : "Where did you go next?"}</label>
             {locations.length > 2 && <button type="button" className="log-remove-location"
               onClick={() => removeLocation(location.id)} aria-label={`Remove location ${number}${location.label ? `, ${location.label}` : ""}`}>
               <Icon name="close" size={16}/>
@@ -569,7 +571,7 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
           <PlaceField fieldId={fieldId} location={location} number={number}
             onChange={patch => updateLocation(location.id, patch)}/>
           <p className="log-map-prompt">Or pick location {number} on the map</p>
-          <RouteBuilderMap locationNumber={number} locations={locations} route={route}
+          <RouteBuilderMap locationNumber={number} locations={locations} current={location} route={route}
             onPick={patch => updateLocation(location.id, patch)}/>
         </div>;
       })}

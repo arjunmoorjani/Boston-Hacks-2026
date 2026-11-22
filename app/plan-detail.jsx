@@ -3,7 +3,7 @@
 // Plan detail inside the bottom sheet: header, getting there by T, the stops, "Keep going"
 // suggestions from the last stop, and a sticky Modify / Do this plan bar.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Icon } from "./icons";
 import { HeartButton } from "./heart-button";
 import { distanceLabel, minutesLabel } from "../lib/directions.mjs";
@@ -11,6 +11,7 @@ import { LEG_MODES, LONG_WALK_M, bikeNotQuicker, navSteps } from "../lib/legs.mj
 import { LINES, lineFamily, duration, costLabel } from "./route-list";
 import { suggestRoutes } from "../lib/suggest.mjs";
 import { ActivityPhotos, RouteThumb } from "./profile";
+import { fetchPlacePhoto } from "../lib/place-profile.mjs";
 
 const PRICE = {
   PRICE_LEVEL_FREE: "free", PRICE_LEVEL_INEXPENSIVE: "$", PRICE_LEVEL_MODERATE: "$$",
@@ -153,6 +154,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
             {onFavorite && <HeartButton on={favorite} onToggle={onFavorite} label={walk.title}/>}
           </div>
           <p className="plan-meta">{meta}</p>
+          <StopPhotos stops={walk.stops} onOpen={onSelectStop}/>
         </>}
 
     {walking && <div className="walk-progress" role="status">
@@ -228,5 +230,40 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
             {!walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
           </button>}
     </div>}
+  </div>;
+}
+
+// One photo per stop (from Google Places), side by side like a place's photos, each with its stop number and name.
+// Tapping one opens that stop's place card (like tapping the stop in the list).
+// Stops without a photo are left out; nothing shows until the first photo is in.
+function StopPhotos({ stops, onOpen }) {
+  const [photos, setPhotos] = useState({});
+  const key = stops.map(stop => stop.placeId ?? "").join(",");
+  useEffect(() => {
+    setPhotos({});
+    let active = true;
+    stops.forEach((stop, index) => {
+      if (!stop.placeId) return;
+      fetchPlacePhoto(stop.placeId, 600)
+        .then(photo => { if (active && photo) setPhotos(current => ({ ...current, [index]: photo })); })
+        .catch(() => {});
+    });
+    return () => { active = false; };
+  }, [key]);
+
+  const shown = stops.map((stop, index) => ({ stop, index, photo: photos[index] })).filter(item => item.photo);
+  if (!shown.length) return null;
+  return <div className="stop-photos" aria-label="Photos of the stops">
+    {shown.map(({ stop, index, photo }) => <figure key={index}>
+      <button type="button" className="stop-photo-open" onClick={() => onOpen?.(index)} aria-label={`Open stop ${index + 1}, ${stop.name}`}>
+        {/* no referrerPolicy: Google checks the referrer against the key's website restrictions */}
+        <img src={photo.src} alt="" loading="lazy"/>
+      </button>
+      <figcaption>
+        <span className="stop-photo-name"><span className="stop-photo-number">{index + 1}</span><span className="stop-photo-title">{stop.name}</span></span>
+        {photo.author && <span className="stop-photo-credit">{photo.author.uri
+          ? <a href={photo.author.uri} target="_blank" rel="noreferrer">{photo.author.name}</a> : photo.author.name}</span>}
+      </figcaption>
+    </figure>)}
   </div>;
 }

@@ -29,9 +29,25 @@ function tLineWeights(zoom = 14) {
   return { outline: 4 + (10 * closeUp), color: 2 + (6 * closeUp) };
 }
 
+// Browsing many walks: open on the ones in and around downtown (about 2.5 km), so routes are big enough to read,
+// instead of zooming out to show every walk from Medford to Quincy. Farther walks are a pinch away.
+const DOWNTOWN = [42.357, -71.062];
+const CORE_KM = 2.5;
+const BROWSE_MIN_ZOOM = 13;
+function nearDowntown(walk) {
+  const [lat, lng] = walk.stops[0]?.point ?? walk.path[0];
+  const km = Math.hypot((lat - DOWNTOWN[0]) * 111, (lng - DOWNTOWN[1]) * 82);
+  return km <= CORE_KM;
+}
+
 function fitWalks({ map, maps }, walks) {
-  const visible = walks.filter(walk => walk?.path?.length);
+  let visible = walks.filter(walk => walk?.path?.length);
   if (!visible.length) return;
+  let browsing = false;
+  if (visible.length > 3) {
+    const core = visible.filter(nearDowntown);
+    if (core.length >= 3) { visible = core; browsing = true; }
+  }
   const bounds = new maps.LatLngBounds();
   for (const walk of visible) {
     for (const point of walk.path) bounds.extend(mapPoint(point));
@@ -47,6 +63,8 @@ function fitWalks({ map, maps }, walks) {
   const wide = map.getDiv().clientWidth >= 900;
   map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 }
     : { top: 120, left: 40, right: 70, bottom: 40 });
+  // On a phone downtown is wider than the screen (MIT to East Boston): stay at city level, centered on it.
+  if (browsing) maps.event.addListenerOnce(map, "idle", () => { if (map.getZoom() < BROWSE_MIN_ZOOM) map.setZoom(BROWSE_MIN_ZOOM); });
 }
 
 // Fit the map to a set of [lat, lng] points, leaving room for the top bar and the sheet/panel.
@@ -57,7 +75,7 @@ function fitPoints({ map, maps }, points, padding) {
   const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
   if (Math.abs(ne.lat() - sw.lat()) < 0.0008 && Math.abs(ne.lng() - sw.lng()) < 0.0008) {
     map.setCenter(bounds.getCenter());
-    map.setZoom(17);
+    map.setZoom(16); // one place: street level with its neighbors around it (17 was too close on the small log maps)
     return;
   }
   const wide = map.getDiv().clientWidth >= 900;
@@ -375,12 +393,17 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       const cx = mapBox.left + mapBox.width / 2, cy = mapBox.top + mapBox.height / 2;
       const fromCenter = box => Math.hypot((box.left + box.right) / 2 - cx, (box.top + box.bottom) / 2 - cy);
 
-      // Park and T names are drawn on top of everything and nothing else hides them. T names make way only for each
+      // Park and T names are drawn on top of everything else. They make way only for the stop names above; T names make way only for each
       // other; park names make way for each other and are capped for the screen size, like Google's (about 4 on a
       // phone at zoom 15, 6 at 16, 9 at 17). Order: names already showing keep their spot (no flicker as you zoom),
       // then real parks before plazas and playgrounds, then nearest the center. Everything else keeps clear of them.
       const tier = zoom >= 17 ? 2 : zoom >= LABEL_ZOOM ? 1 : 0; // zoom 15 / 16 / 17+
       const parkRoom = Math.min(MAX_PARK_NAMES[tier], Math.max(3, Math.round(area / [60000, 40000, 25000][tier])));
+      // The open walk's own stop names (and a route's "4 min" label) come first: park and T names, and place icons,
+      // make way for them.
+      const ours = [...container.current.querySelectorAll(".stop-label, .dir-route-duration")]
+        .map(element => element.getBoundingClientRect()).filter(box => box.width);
+      fixed.push(...ours);
       const measured = topLabels.current.map(label => {
         const text = label.div.firstElementChild;
         text?.classList.remove("top-hidden");
@@ -398,7 +421,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       for (const { label, text, box } of measured) {
         const rivals = label.station ? stationBoxes : parkBoxes;
         const full = !label.station && onScreen(box) && parks >= parkRoom;
-        if (full || rivals.some(other => overlaps(box, other, 4))) { text.classList.add("top-hidden"); continue; }
+        if (full || rivals.some(other => overlaps(box, other, 4)) || ours.some(other => overlaps(box, other, 4))) { text.classList.add("top-hidden"); continue; }
         if (!label.station && onScreen(box)) parks += 1;
         rivals.push(box);
         fixed.push(box);
@@ -449,12 +472,29 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
   useEffect(() => {
     if (!context) return;
+    // in priority order: cities, then neighborhoods, then water and other features
     const labels = [
       ...CITIES.map(city => textLabel(context, { point: city.point, text: city.name, className: "city-label" })),
       ...NEIGHBORHOODS.map(hood => textLabel(context, { point: hood.point, text: hood.name, className: "hood-label" })),
       ...FEATURES.map(feature => textLabel(context, { point: feature.point, text: feature.name, className: `feature-label ${feature.kind}-label` })),
     ];
-    return () => { for (const label of labels) label.setMap(null); };
+    // Names that would overlap one already shown wait for a closer zoom (zoom 13 has more of them than fit).
+    const overlaps = (a, b) => a.left < b.right + 6 && a.right + 6 > b.left && a.top < b.bottom + 4 && a.bottom + 4 > b.top;
+    let frame = 0;
+    const declutter = () => {
+      const shown = [];
+      for (const label of labels) {
+        const text = label.div?.firstElementChild;
+        if (!text) continue;
+        text.classList.remove("area-hidden");
+        const box = text.getBoundingClientRect();
+        if (!box.width) continue; // not shown at this zoom
+        if (shown.some(other => overlaps(box, other))) text.classList.add("area-hidden");
+        else shown.push(box);
+      }
+    };
+    const idle = context.map.addListener("idle", () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(declutter); });
+    return () => { cancelAnimationFrame(frame); idle.remove(); for (const label of labels) label.setMap(null); };
   }, [context]);
 
   useEffect(() => {

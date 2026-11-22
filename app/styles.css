@@ -234,7 +234,7 @@ h2 { margin: 6px 0 13px; font-size: clamp(1.8rem, 3.1vw, 2.5rem); line-height: 1
 .save-outing p:empty { margin-top: -8px; }
 
 /* full-screen map with a sheet over it (Strava-style) */
-.app { --peek: 236px; min-height: 100svh; }
+.app { --peek: 316px; min-height: 100svh; } /* collapsed sheet: title, tabs, search and category chips all show above the floating nav */
 html:has(.app) { scroll-snap-type: y proximity; }
 .map-panel { position: fixed; top: 0; left: 0; right: 0; bottom: var(--peek); z-index: 0; }
 .map-panel .map { height: 100%; border: 0; border-radius: 0; }
@@ -260,7 +260,19 @@ html:has(.app) { scroll-snap-type: y proximity; }
 .chip-tag[aria-pressed="true"] { background: #E1EDFB; color: #3A7FD0; border-color: transparent; }
 .line-dot { width: 10px; height: 10px; border-radius: 50%; }
 .route-cards { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }
-.route-card { display: grid; justify-items: start; gap: 5px; width: 100%; padding: 13px 14px; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.route-card { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.route-card-body { display: grid; justify-items: start; gap: 5px; min-width: 0; }
+.route-sketch { width: 72px; height: 72px; border-radius: 10px; background: #F1F2EE; }
+.route-card-media { position: relative; display: block; width: 72px; height: 72px; overflow: hidden; border-radius: 10px; background: #F1F2EE; }
+.route-card-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Google requires the photographer's name with a place photo: a small credit along the bottom */
+.route-card-credit { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; padding: 5px 3px 1.5px; background: linear-gradient(#0000, #0008); color: #fff; font-size: 6px; font-weight: 600; line-height: 1.1; white-space: nowrap; text-overflow: ellipsis; }
+.route-sketch path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.route-sketch-casing { stroke: #fff; stroke-width: 5.5; }
+.route-sketch-line { stroke: var(--route); stroke-width: 3; }
+.route-sketch-stop { fill: var(--stop); stroke: #fff; stroke-width: 1.6; }
+.route-sketch.is-favorite .route-sketch-line { stroke: var(--favorite); }
+.route-sketch.is-favorite .route-sketch-stop { stroke: var(--favorite); }
 .route-card:hover { border-color: #c9c7bc; }
 .route-card[aria-pressed="true"] { border-color: var(--route); box-shadow: 0 0 0 2px #4A90E233; }
 .route-card-title { font-weight: 800; font-size: 1.02rem; letter-spacing: -.02em; }
@@ -342,7 +354,7 @@ html:has(.app) { scroll-snap-type: y proximity; }
 .keep-going-path > span { display: inline-flex; align-items: center; gap: 6px; }
 .keep-going small { color: var(--muted); font-size: .8rem; }
 /* Fork / Do this plan: on phones the bar keeps clear of the floating nav (66px tall, 14px up) with a white band behind it */
-.plan-bar { position: sticky; bottom: 0; z-index: 3; display: flex; gap: 10px; margin: 0 -18px; padding: 12px 18px calc(max(14px, env(safe-area-inset-bottom)) + 80px); background: linear-gradient(#fff0, #fff 12%); }
+.plan-bar { position: sticky; bottom: 0; z-index: 3; display: flex; gap: 10px; margin: 0 -18px; padding: 12px 18px calc(max(14px, env(safe-area-inset-bottom)) + 80px); background: var(--paper); box-shadow: 0 -1px 0 #e7e5de; } /* solid, so nothing half-shows behind the buttons */
 .plan-secondary, .plan-primary { min-height: 52px; border-radius: 99px; font-weight: 800; font-size: 1rem; }
 .plan-secondary { flex: 0 0 auto; padding: 0 22px; background: #fff; border: 1px solid #d8dbd0; }
 .plan-primary { flex: 1; border: 0; background: #4A90E2; color: #fff; }
@@ -432,6 +444,9 @@ html:has(.app) { scroll-snap-type: y proximity; }
   border: 4px solid var(--paper);
   border-radius: 50%;
   background: var(--route);
+  color: #fff;
+  display: grid;
+  place-items: center;
   box-shadow: 0 3px 10px rgb(88 57 181 / .3);
   cursor: pointer;
   transition: transform .15s ease, box-shadow .15s ease;
@@ -442,7 +457,7 @@ html:has(.app) { scroll-snap-type: y proximity; }
 .bottom-sheet, .profile-page { padding-bottom: max(96px, calc(82px + env(safe-area-inset-bottom))); }
 .bottom-sheet:has(.plan-bar) { padding-bottom: 0; } /* the plan bar already keeps clear of the nav */
 @media (max-width: 899px) {
-  .app:has(.plan-detail) { --peek: 330px; } /* phones, collapsed sheet on a walk: room for its title above the plan bar */
+  .app:has(.plan-detail) { --peek: 316px; } /* phones, collapsed sheet on a walk: its title and info line end right above the plan bar */
 }
 /* desktop: center the nav over the map, clear of the 400px panel on the left, so it never covers the panel */
 @media (min-width: 900px) {
@@ -809,6 +824,7 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .filter-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px 7px 11px; border: 1px solid #d8dbd0; border-radius: 10px; background: #fff; font-size: .84rem; font-weight: 800; }
 .filter-toggle.active { border-color: #4A90E2; color: #2B6CC4; background: #F3F8FE; }
+.chip-row .filter-toggle { flex-shrink: 0; border-radius: 99px; } /* first chip in the category row */
 .filter-badge { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: #4A90E2; color: #fff; font-size: .7rem; }
 .active-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px 6px 10px; border: 0; border-radius: 99px; background: #E1EDFB; color: #2B6CC4; font-size: .8rem; font-weight: 700; }
 .active-chip:hover { background: #D2E4F8; }
@@ -832,6 +848,23 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .place-photos img { display: block; height: 100%; width: 100%; min-width: 150px; object-fit: cover; }
 .place-photos figcaption { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); padding: 2px 7px; border-radius: 99px; background: #000a; color: #fff; font-size: .66rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .place-photos figcaption a { color: inherit; text-decoration: none; }
+/* a walk's stops, one photo each, scrolling sideways */
+.stop-photos { display: flex; gap: 8px; margin: 12px -18px 4px; padding: 0 18px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 18px; scrollbar-width: none; }
+.stop-photos::-webkit-scrollbar { display: none; }
+.stop-photos figure { position: relative; flex: 0 0 72%; max-width: 260px; height: 160px; margin: 0; overflow: hidden; border-radius: 14px; background: #ecebe4; scroll-snap-align: start; }
+.stop-photos img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.stop-photo-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.stop-photo-open:active img { transform: scale(.98); }
+.stop-photos figcaption { pointer-events: none; } /* taps go to the photo; the credit link stays tappable */
+.stop-photo-credit a { pointer-events: auto; }
+.stop-photos figcaption { position: absolute; inset: auto 0 0; display: grid; gap: 1px; padding: 22px 10px 7px; background: linear-gradient(#0000, #000b); color: #fff; }
+/* the ring is a border, not a shadow: the name's overflow clipping cut a shadow ring off on the left */
+.stop-photo-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .86rem; font-weight: 800; }
+.stop-photo-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stop-photo-number { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 20px; height: 20px; border: 1.5px solid #fff; border-radius: 50%; background: var(--stop); font-size: .68rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.plan-detail.is-favorite .stop-photo-number { border-color: var(--favorite); }
+.stop-photo-credit { overflow: hidden; font-size: 6px; opacity: .85; white-space: nowrap; text-overflow: ellipsis; }
+.stop-photo-credit a { color: inherit; text-decoration: none; }
 .place-profile-inner { position: relative; }
 .place-close-form { position: sticky; top: 0; z-index: 2; height: 0; display: flex; justify-content: flex-end; padding: 0 10px; }
 .place-close-form .place-close { margin-top: 10px; }
@@ -970,6 +1003,7 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .water-label { color: #5E7C92; }
 .land-label { color: #6b6d66; font-size: 14px; }
 .zoom-features .feature-label { display: block; }
+.map-text.area-hidden { visibility: hidden; }
 
 /* favorites: heart button (like YouTube / X), list tabs, heart on cards */
 .plan-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
