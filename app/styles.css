@@ -905,3 +905,9 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .list-tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgb(33 35 32 / .12); }
 .list-tab-count { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--favorite); color: #fff; font-size: .72rem; }
 .route-card-heart { display: inline-block; margin-left: 6px; vertical-align: -2px; color: var(--favorite); }
+.plan-detail.is-favorite .stop-badge { box-shadow: inset 0 0 0 2.5px var(--favorite); }
+.plan-detail.is-favorite .stop-badge.done { background: var(--favorite); }
+
+/* locate button: sits above the T-lines button */
+.map-panel .locate-toggle, .locate-toggle { bottom: 92px; }
+@media (min-width: 900px) { .map-panel .locate-toggle { left: 432px; bottom: 86px; } }

@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState } from "react";
 import { Icon } from "./icons";
 import { HeartButton } from "./heart-button";
 import { distanceLabel, minutesLabel } from "../lib/directions.mjs";
-import { LEG_MODES, LONG_WALK_M, navSteps } from "../lib/legs.mjs";
+import { LEG_MODES, LONG_WALK_M, bikeNotQuicker, navSteps } from "../lib/legs.mjs";
 import { LINES, lineFamily, duration, costLabel } from "./route-list";
 import { suggestRoutes } from "../lib/suggest.mjs";
 
@@ -53,6 +53,8 @@ function LegRow({ leg, current, onMode, onSteps }) {
       </div>
       {long && <p className="plan-leg-hint">Long walk. The T or a bike may be quicker.</p>}
       {mode === "TRANSIT" && result && !ride && <p className="plan-leg-hint">No T ride helps here, so this is walking the whole way.</p>}
+      {mode === "BICYCLING" && bikeNotQuicker(leg, entry) && <p className="plan-leg-hint">
+        Walking is quicker here (about {minutesLabel(leg.estimateMin)}): bikes have to go around one-way streets and walk-only paths.</p>}
       {open && result && <ol className="dir-steps">{navSteps(result, leg.to.name).slice(0, -1).map((step, i) => <li key={i}>
         <span>{step.instruction}{step.note && <small>{step.note}</small>}</span>
         {step.meters > 0 && <em>{distanceLabel(step.meters)}</em>}
@@ -83,7 +85,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
 
   const walking = step !== null;
 
-  return <div className="plan-detail">
+  return <div className={`plan-detail ${favorite ? "is-favorite" : ""}`}>
     <button type="button" className="back-link" onClick={onBack}><Icon name="arrowLeft" size={18}/>All walks</button>
     <div className="plan-label">{label}</div>
     <div className="plan-title-row">

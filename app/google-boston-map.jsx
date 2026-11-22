@@ -8,6 +8,7 @@ import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, IC
 import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
 import { CITIES, FEATURES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
+import { Icon } from "./icons";
 
 // Most places and park names on screen at once, at zoom 15 / 16 / 17+, whatever the screen size (a phone's screen
 // size usually allows fewer: about 10 / 15 / 24 places and 4 / 5 / 9 park names).
@@ -163,8 +164,8 @@ function placeMarker(context, place, onClick) {
 
 // A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
 // bigger when selected, blue with a check once you've done it.
-function stopMarkerIcon(maps, stop, number, { selected = false, done = false } = {}) {
-  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done });
+function stopMarkerIcon(maps, stop, number, { selected = false, done = false, favorite = false } = {}) {
+  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done, favorite });
   return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
 }
 
@@ -190,7 +191,7 @@ function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, onLocate, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -516,7 +517,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     stops.current = walk.stops.map((stop, index) => {
       const marker = new maps.Marker({
         map, position: mapPoint(stop.point), title: `Stop ${index + 1}: ${stop.name}`,
-        icon: stopMarkerIcon(maps, stop, index + 1), zIndex: 30,
+        icon: stopMarkerIcon(maps, stop, index + 1, { favorite: favoriteIds?.has(walk.id) }), zIndex: 30,
       });
       marker.addListener("click", () => onSelect(index));
       return marker;
@@ -587,10 +588,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   useEffect(() => {
     if (!context) return;
     stops.current.forEach((marker, index) => {
-      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, { selected: selected === index, done: index < doneStops }));
+      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1,
+        { selected: selected === index, done: index < doneStops, favorite: favoriteIds?.has(walk.id) }));
       marker.setZIndex(selected === index ? 31 : 30);
     });
-  }, [context, walk, selected, doneStops]);
+  }, [context, walk, selected, doneStops, favoriteIds]);
 
   useEffect(() => {
     if (!context || !location) return;
@@ -605,6 +607,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   return <section className={`map google-map ${zoomClasses}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
+    {onLocate && <button className="locate-toggle transit-toggle catalog-button" type="button" disabled={!context}
+      aria-label={following ? "Stop showing my location" : "Show my location"} aria-pressed={following}
+      title={following ? "Stop showing my location" : "Show my location"} onClick={onLocate}>
+      <Icon name="locate" size={22}/>
+    </button>}
     {showTransitToggle && <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       title={transit ? "Hide T lines" : "Show T lines"}

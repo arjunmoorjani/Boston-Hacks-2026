@@ -42,7 +42,9 @@ export default function Home() {
   const [selectedWalkId, setSelectedWalkId] = useState(null);
   const [filters, setFilters] = useState(emptyFilters); // one set of filters for the list and the map
   const [selected, setSelected] = useState(null);
-  const [following, setFollowing] = useState(true);
+  // Location is off until you ask for it: the locate button on the map (follow me), or doing a walk (turn-by-turn
+  // follows you). It's kept in memory only while one of those is on, never stored or sent anywhere.
+  const [following, setFollowing] = useState(false);
   const [location, setLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [step, setStep] = useState(null);
@@ -129,7 +131,9 @@ export default function Home() {
   const navEntry = navLeg ? entryOf(navLeg, navMode) : null;
   const navKey = navLeg ? legKey(navLeg.from, navLeg.to, navMode) : null;
   const navList = useMemo(() => navEntry?.status === "ready" ? navSteps(navEntry.result, navLeg.to.name) : [], [navEntry, navLeg]);
-  const navFollow = useMemo(() => followSteps(navList, navIndex, following ? location : null), [navList, navIndex, following, location]);
+  const walking = view === "detail" && step != null;
+  const trackLocation = following || walking;
+  const navFollow = useMemo(() => followSteps(navList, navIndex, trackLocation ? location : null), [navList, navIndex, trackLocation, location]);
   const navStep = navList[navFollow.index];
   const navFocus = useMemo(() => navLeg && !navHidden && navEntry?.status === "ready"
     ? (navStep?.path?.length ? navStep.path : [navLeg.to.point]) : null, [navLeg, navHidden, navEntry, navStep]);
@@ -277,14 +281,14 @@ export default function Home() {
   }, [navFollow.index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!following) return;
+    if (!trackLocation) return;
     if (!window.isSecureContext || !navigator.geolocation) {
       setLocationStatus("Location needs a secure connection (HTTPS) or localhost.");
       setFollowing(false);
       return;
     }
     setLocationStatus("Finding your location…");
-    return watchUserLocation(navigator.geolocation, {
+    const stop = watchUserLocation(navigator.geolocation, {
       onLocation: nextLocation => {
         setLocation(nextLocation);
         setLocationStatus("");
@@ -294,7 +298,15 @@ export default function Home() {
         setFollowing(false);
       },
     });
-  }, [following]);
+    return () => { stop(); setLocation(null); }; // turned off: forget where you were
+  }, [trackLocation]);
+
+  // Location messages ("Allow location access…") get out of the way after a few seconds.
+  useEffect(() => {
+    if (!locationStatus || locationStatus === "Finding your location…") return;
+    const timer = setTimeout(() => setLocationStatus(""), 5000);
+    return () => clearTimeout(timer);
+  }, [locationStatus]);
 
   const sheet = useRef(null);
   // Phones scroll the page to move the sheet; on desktop the sheet scrolls by itself.
@@ -594,7 +606,8 @@ export default function Home() {
 
   return <main className="app">
     <div className="map-panel">
-      <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={following ? location : null}
+      <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={trackLocation ? location : null}
+        onLocate={() => setFollowing(value => !value)}
         activeWalkId={view === "detail" ? selectedWalkId : null} onOpenWalk={openWalk}
         legSegments={view === "detail" ? legSegments : null} focusPath={navFocus ?? (view === "list" ? placeFocus : null)}
         highlight={selectedPlace}
