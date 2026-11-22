@@ -4,10 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MetroIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
-import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, minZoomFor, placesForView } from "../lib/nearby-places.mjs";
-import { CITIES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
+import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
+import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
+import { CITIES, FEATURES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
+
+// Most places and park names on screen at once, at zoom 15 / 16 / 17+, whatever the screen size (a phone's screen
+// size usually allows fewer: about 10 / 15 / 24 places and 4 / 5 / 9 park names).
+const MAX_PLACES = [15, 25, 40];
+const MAX_PARK_NAMES = [6, 10, 15];
 
 // Routes and transit lines top out at 24. Keep every name in one protected layer above them.
 const MAP_LABEL_Z_INDEX = 60;
@@ -104,7 +109,9 @@ function htmlMarkerClass(maps) {
       this.setMap(map);
     }
     onAdd() {
-      if (this.interactive) maps.OverlayView.preventMapHitsAndGesturesFrom?.(this.div); // a tap opens the place, not the map
+      // a tap opens the place, not the map; pinch, scroll-wheel zoom and drags still reach the map (blocking those
+      // made the browser zoom the whole page when the pointer was over a marker)
+      if (this.interactive) maps.OverlayView.preventMapHitsFrom?.(this.div);
       // labels and pins sit on top of the route lines; they take no taps, so places under them stay tappable
       this.getPanes()[this.interactive ? "overlayMouseTarget" : "floatPane"].appendChild(this.div);
     }
@@ -135,7 +142,7 @@ function textLabel(context, { point, text, className, transform, zIndex = MAP_LA
 function placeMarker(context, place, onClick) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "poi-marker";
+  button.className = place.icon === "park" ? "poi-marker is-park" : "poi-marker"; // a park's name is drawn on top instead
   button.style.setProperty("--poi", place.color);
   button.setAttribute("aria-label", place.name);
   const dot = document.createElement("span");
@@ -164,10 +171,11 @@ function stopMarkerIcon(maps, stop, number, { selected = false, done = false } =
 // Two lines per route: a white casing under the blue line. The open walk is at full strength, others dimmed.
 // Popular walks glow: soft light-blue halos under the casing, and they stay at full strength.
 // The editor's draft (straight lines between stops) is a dashed, lighter line.
-function drawRoute(maps, map, path, { active, draft, popular }) {
-  const { line, casing, glow, lineWeight, casingWeight, dimOpacity, draftOpacity } = ROUTE_THEME;
-  const opacity = draft ? draftOpacity : active || popular ? 1 : dimOpacity;
-  const z = active ? 20 : popular ? 10 : 4;
+function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
+  const { casing, glow, lineWeight, casingWeight, dimOpacity, draftOpacity } = ROUTE_THEME;
+  const line = favorite ? ROUTE_THEME.favorite : ROUTE_THEME.line; // hearted walks are pink
+  const opacity = draft ? draftOpacity : active || popular || favorite ? 1 : dimOpacity; // favorites stand out too
+  const z = active ? 20 : favorite ? 14 : popular ? 10 : 4;
   const halos = popular && !draft ? [
     new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.12, strokeWeight: casingWeight + 16, clickable: false, zIndex: z }),
     new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.22, strokeWeight: casingWeight + 8, clickable: false, zIndex: z }),
@@ -182,7 +190,7 @@ function drawRoute(maps, map, path, { active, draft, popular }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -192,6 +200,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const [zoom, setZoom] = useState(14);
   const [nearby, setNearby] = useState([]);           // our place markers while exploring
   const [nearbyFailed, setNearbyFailed] = useState(false); // Nearby Search unavailable: show Google's icons instead
+  const [parkNamesFailed, setParkNamesFailed] = useState(false); // park-and-T search unavailable: keep Google's names
   const [mapError, setMapError] = useState("");
   const placeClick = useRef(onPlaceClick);
   placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
@@ -261,17 +270,18 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // place is selected (its card is open): no place icons at all, so only the walk's stops or that place show.
   const focused = Boolean(activeWalkId) || Boolean(highlight?.point);
   const showPlaces = !focused && !nearbyFailed && (alwaysShowPlaces || zoom >= PLACES_MIN_ZOOM);
+  // From zoom 15 (where our place data loads) park and T names are ours, on top of everything; Google's are off.
+  const ourTopNames = !nearbyFailed && !parkNamesFailed && zoom >= PLACES_MIN_ZOOM;
   useEffect(() => {
     if (!context) return;
-    context.map.setOptions({
-      styles: focused ? WALK_OPEN_STYLE : nearbyFailed ? EXPLORE_GOOGLE_ICONS_STYLE : EXPLORE_STYLE,
-      clickableIcons: !focused,
-    });
-  }, [context, focused, nearbyFailed]);
+    const base = focused ? WALK_OPEN_STYLE : nearbyFailed ? EXPLORE_GOOGLE_ICONS_STYLE : EXPLORE_STYLE;
+    context.map.setOptions({ styles: ourTopNames ? [...base, ...HIDE_GOOGLE_PARK_T_NAMES] : base, clickableIcons: !focused });
+  }, [context, focused, nearbyFailed, ourTopNames]);
 
-  // Load places for the area on screen whenever the map settles (lib/nearby-places.mjs caches by area).
+  // Load places for the area on screen whenever the map settles (lib/nearby-places.mjs caches by area). Also with a
+  // walk open: its park and T names come from the same data.
   useEffect(() => {
-    if (!context || focused || nearbyFailed) return;
+    if (!context || nearbyFailed) return;
     const { map } = context;
     let stale = false;
     const load = () => {
@@ -287,8 +297,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         east: center.lng() + CELL_DEG * 1.5,
         west: center.lng() - CELL_DEG * 1.5,
       } : visible;
-      placesForView({ north, south, east, west }, [center.lat(), center.lng()]).then(({ places, failed }) => {
+      placesForView({ north, south, east, west }, [center.lat(), center.lng()]).then(({ places, failed, parkNamesFailed: parksDown }) => {
         if (stale) return;
+        if (parksDown) setParkNamesFailed(true);
         if (failed && !places.length) setNearbyFailed(true);
         else setNearby(places);
       });
@@ -296,14 +307,41 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const idle = map.addListener("idle", load);
     load();
     return () => { stale = true; idle.remove(); };
-  }, [context, focused, nearbyFailed, alwaysShowPlaces]);
+  }, [context, nearbyFailed, alwaysShowPlaces]);
+
+  // Park and T station names: always shown from zoom 15, on the top layer, in every mode. Other names and icons
+  // give way to them. T stations get no marker, just the name with a small T.
+  // (A park that's a stop on the open walk already has its name next to the stop.)
+  const topNames = useMemo(() => {
+    if (!ourTopNames) return [];
+    const stopIds = new Set(walk.stops.map(stop => stop.placeId).filter(Boolean));
+    return parkAndTNames(nearby, zoom).filter(place => !stopIds.has(place.placeId));
+  }, [ourTopNames, nearby, walk, zoom]);
+  const topLabels = useRef([]);
+  const topShown = useRef(new Set()); // park names on screen after the last check: they keep their spot as you zoom
+  useEffect(() => {
+    if (!context) return;
+    const labels = topNames.map(place => {
+      const station = place.icon === "train";
+      // next to a park's icon while exploring; centered on the spot otherwise (T stations, or a walk is open)
+      const beside = !station && !focused;
+      const label = textLabel(context, { point: place.point, text: place.name, zIndex: MAP_LABEL_Z_INDEX + (station ? 10 : 20), // parks on top of all
+        className: station ? "top-label t-label" : "top-label park-label", transform: beside ? "translate(14px,-50%)" : "translate(-50%,-50%)" });
+      label.placeId = place.placeId;
+      label.station = station;
+      label.weight = station ? 0 : parkWeight(place);
+      return label;
+    });
+    topLabels.current = labels;
+    return () => { for (const label of labels) label.setMap(null); topLabels.current = []; };
+  }, [context, topNames, focused]);
 
   // Draw our place markers that this zoom has reached (lib/nearby-places.mjs: prominent places show farther out),
   // adding and removing only what changed. `nearby` is in prominence order.
   const placeMarkers = useRef(new Map());
   const visiblePlaces = useMemo(() => showPlaces
-    ? nearby.filter(place => alwaysShowPlaces || zoom >= minZoomFor(place))
-    : [], [showPlaces, nearby, zoom, alwaysShowPlaces]);
+    ? nearby.filter(place => place.icon !== "train" && (alwaysShowPlaces || zoom >= minZoomFor(place)) // T stations: names only
+      && !(place.icon === "park" && !isRealPark(place))) : [], [showPlaces, nearby, zoom, alwaysShowPlaces]);
   useEffect(() => {
     if (!context) return;
     const drawn = placeMarkers.current;
@@ -316,39 +354,91 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   }, [context, visiblePlaces]);
   useEffect(() => () => { for (const marker of placeMarkers.current.values()) marker.setMap(null); }, []);
 
-  // Google's rule for crowded spots, most prominent first: an icon that would overlap a more prominent one waits
-  // for a closer zoom, and a name that would overlap a shown icon or name is left off (its icon stays).
-  // Re-checked whenever the map settles.
+  // Google's rules for crowded spots, most prominent place first:
+  //  - from zoom 16 a place is its icon and its name together: it shows only if both fit clear of everything already
+  //    shown (places, park and T names); otherwise the whole place waits for a closer zoom
+  //  - at zoom 15, icons only, with room between them
+  //  - never more places than the screen has room for (MARKER_AREA px² each)
+  // Park icons always show (their names do). Re-checked whenever the map settles.
   useEffect(() => {
-    if (!context || !visiblePlaces.length) return;
+    if (!context || (!visiblePlaces.length && !topNames.length)) return;
     const overlaps = (a, b, gap) => a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top;
     const declutter = () => {
-      const shown = [];
-      const dots = [];
-      for (const place of visiblePlaces) {
-        const marker = placeMarkers.current.get(place.placeId);
-        const button = marker?.div.firstElementChild;
-        if (!button) continue;
-        button.classList.remove("poi-hidden");
-        const dot = button.querySelector(".poi-dot").getBoundingClientRect();
-        if (!alwaysShowPlaces && dots.some(other => overlaps(dot, other, 2))) button.classList.add("poi-hidden");
-        else { dots.push(dot); shown.push(button); }
+      const fixed = [];
+      const mapBox = container.current.getBoundingClientRect();
+      const area = mapBox.width * mapBox.height;
+      // The middle of the screen is where you're looking: when places compete, the one nearer the center wins.
+      const cx = mapBox.left + mapBox.width / 2, cy = mapBox.top + mapBox.height / 2;
+      const fromCenter = box => Math.hypot((box.left + box.right) / 2 - cx, (box.top + box.bottom) / 2 - cy);
+
+      // Park and T names are drawn on top of everything and nothing else hides them. T names make way only for each
+      // other; park names make way for each other and are capped for the screen size, like Google's (about 4 on a
+      // phone at zoom 15, 6 at 16, 9 at 17). Order: names already showing keep their spot (no flicker as you zoom),
+      // then real parks before plazas and playgrounds, then nearest the center. Everything else keeps clear of them.
+      const tier = zoom >= 17 ? 2 : zoom >= LABEL_ZOOM ? 1 : 0; // zoom 15 / 16 / 17+
+      const parkRoom = Math.min(MAX_PARK_NAMES[tier], Math.max(3, Math.round(area / [60000, 40000, 25000][tier])));
+      const measured = topLabels.current.map(label => {
+        const text = label.div.firstElementChild;
+        text?.classList.remove("top-hidden");
+        return { label, text, box: text?.getBoundingClientRect() };
+      }).filter(item => item.text && item.box.width);
+      const onScreen = box => box.right > mapBox.left && box.left < mapBox.right && box.bottom > mapBox.top && box.top < mapBox.bottom;
+      measured.sort((a, b) => (b.label.station - a.label.station)
+        || (topShown.current.has(b.label.placeId) - topShown.current.has(a.label.placeId))
+        || (a.label.weight - b.label.weight)
+        || (fromCenter(a.box) - fromCenter(b.box)));
+      const nowShown = new Set();
+      const parkBoxes = [];
+      const stationBoxes = [];
+      let parks = 0;
+      for (const { label, text, box } of measured) {
+        const rivals = label.station ? stationBoxes : parkBoxes;
+        const full = !label.station && onScreen(box) && parks >= parkRoom;
+        if (full || rivals.some(other => overlaps(box, other, 4))) { text.classList.add("top-hidden"); continue; }
+        if (!label.station && onScreen(box)) parks += 1;
+        rivals.push(box);
+        fixed.push(box);
+        nowShown.add(label.placeId);
       }
-      if (zoom < LABEL_ZOOM) return;
-      const names = [];
-      for (const button of shown) {
+      topShown.current = nowShown;
+
+      const room = Math.min(MAX_PLACES[tier], Math.max(4, Math.round(area / [22000, 14000, 9000][tier])));
+      const withNames = zoom >= LABEL_ZOOM;
+      const taken = [...fixed];
+      const union = (a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) });
+      let count = 0;
+      // parks first (their icons go with their names), then places by prominence tier, nearest the center first
+      const items = visiblePlaces.map(place => {
+        const button = placeMarkers.current.get(place.placeId)?.div.firstElementChild;
+        return { place, button, distance: button ? fromCenter(button.querySelector(".poi-dot").getBoundingClientRect()) : Infinity };
+      }).filter(item => item.button);
+      items.sort((a, b) => ((b.place.icon === "park") - (a.place.icon === "park"))
+        || (minZoomFor(a.place) - minZoomFor(b.place)) || (a.distance - b.distance));
+      for (const { place, button } of items) {
         const name = button.querySelector(".poi-name");
+        button.classList.remove("poi-hidden");
         name.classList.remove("poi-name-hidden");
-        const box = name.getBoundingClientRect();
-        if (!box.width) continue;
-        if (names.some(other => overlaps(box, other, 3)) || dots.some(dot => overlaps(box, dot, 3))) name.classList.add("poi-name-hidden");
-        else names.push(box);
+        const dot = button.querySelector(".poi-dot").getBoundingClientRect();
+        if (place.icon === "park") {
+          // a park's icon goes with its name: shown together, or (when a bigger park's name is in the way) not at all
+          if (ourTopNames && !nowShown.has(place.placeId)) { button.classList.add("poi-hidden"); continue; }
+          taken.push(dot); // parks don't use up the room for other places
+          continue;
+        }
+        const nameBox = withNames ? name.getBoundingClientRect() : null;
+        const unit = nameBox?.width ? union(dot, nameBox) : dot;
+        const gap = withNames ? 6 : 10;
+        if (!onScreen(unit)) continue; // off screen: doesn't use up the room
+        // (logger maps keep every icon: no room limit or overlap hiding there)
+        if (!alwaysShowPlaces && (count >= room || taken.some(other => overlaps(unit, other, gap)))) { button.classList.add("poi-hidden"); continue; }
+        taken.push(unit);
+        count += 1;
       }
     };
     const frame = requestAnimationFrame(declutter);
     const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
     return () => { cancelAnimationFrame(frame); idle.remove(); };
-  }, [context, visiblePlaces, zoom, alwaysShowPlaces]);
+  }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames, alwaysShowPlaces]);
 
   // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
   useEffect(() => {
@@ -356,6 +446,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const labels = [
       ...CITIES.map(city => textLabel(context, { point: city.point, text: city.name, className: "city-label" })),
       ...NEIGHBORHOODS.map(hood => textLabel(context, { point: hood.point, text: hood.name, className: "hood-label" })),
+      ...FEATURES.map(feature => textLabel(context, { point: feature.point, text: feature.name, className: `feature-label ${feature.kind}-label` })),
     ];
     return () => { for (const label of labels) label.setMap(null); };
   }, [context]);
@@ -417,7 +508,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         clickable: true, cursor: "pointer", zIndex: active ? 24 : 8,
       });
       const clickListener = hit.addListener("click", () => walkClick.current?.(item.id));
-      return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id) }), hit, clickListener }];
+      return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id), favorite: favoriteIds?.has(item.id) }), hit, clickListener }];
     }));
     const stopLabels = walk.stops.map(stop => textLabel(context, {
       point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)",
@@ -448,7 +539,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       for (const label of stopLabels) label.setMap(null);
       stops.current = [];
     };
-  }, [context, walk, walks, onSelect, activeWalkId, popularIds]);
+  }, [context, walk, walks, onSelect, activeWalkId, popularIds, favoriteIds]);
 
   // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
@@ -510,7 +601,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   // Which of our labels show at this zoom (see .zoom-* rules in app/styles.css).
   const level = areaLevel(zoom);
-  const zoomClasses = [level.city && "zoom-city", level.hood && "zoom-hood", zoom >= 15 && "zoom-stops", zoom >= LABEL_ZOOM && "zoom-names"].filter(Boolean).join(" ");
+  const zoomClasses = [level.city && "zoom-city", level.hood && "zoom-hood", level.feature && "zoom-features", zoom >= 15 && "zoom-stops", zoom >= LABEL_ZOOM && "zoom-names"].filter(Boolean).join(" ");
 
   return <section className={`map google-map ${zoomClasses}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>

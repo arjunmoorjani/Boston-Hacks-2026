@@ -27,7 +27,7 @@ import { saveOuting } from "../lib/save-outing.mjs";
 import { loadRoutes, routesForMap } from "../lib/routes.mjs";
 import { anyActive, applyFilters, categoryCounts, emptyFilters, matchesQuery } from "../lib/route-filters.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
-import { completionFor, emptyProfile, loadProfile, saveProfile } from "../lib/profile-store.mjs";
+import { completionFor, emptyProfile, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -83,10 +83,16 @@ export default function Home() {
   const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
   const allWalks = useMemo(() => [...walks, ...profile.customWalks], [walks, profile.customWalks]);
   // Catalog walks get every filter; your own plans only the search (they have no category/tags).
-  const availableWalks = useMemo(() => [
-    ...applyFilters(walks, filters), ...profile.customWalks.filter(item => matchesQuery(item, filters.query)),
-  ], [walks, filters, profile.customWalks]);
-  const counts = useMemo(() => categoryCounts(walks, filters), [walks, filters]);
+  // Favorites: walks you've hearted (this browser). The Favorites tab narrows the list and the map to them.
+  const [listTab, setListTab] = useState("all");
+  const favoriteIds = useMemo(() => new Set(profile.favorites ?? []), [profile.favorites]);
+  const availableWalks = useMemo(() => {
+    const all = [...applyFilters(walks, filters), ...profile.customWalks.filter(item => matchesQuery(item, filters.query))];
+    return listTab === "favorites" ? all.filter(item => favoriteIds.has(item.id)) : all;
+  }, [walks, filters, profile.customWalks, listTab, favoriteIds]);
+  // category chip counts follow the tab: on Favorites they count favorites
+  const counts = useMemo(() => categoryCounts(listTab === "favorites" ? walks.filter(item => favoriteIds.has(item.id)) : walks, filters),
+    [walks, filters, listTab, favoriteIds]);
   const popularIds = useMemo(() => popularWalkIds(walks, profile.completions), [walks, profile.completions]); // these glow on the map
   const baseWalk = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
   const walk = baseWalk;
@@ -592,7 +598,7 @@ export default function Home() {
         activeWalkId={view === "detail" ? selectedWalkId : null} onOpenWalk={openWalk}
         legSegments={view === "detail" ? legSegments : null} focusPath={navFocus ?? (view === "list" ? placeFocus : null)}
         highlight={selectedPlace}
-        doneStops={view === "detail" && step != null ? step : 0} popularIds={popularIds}
+        doneStops={view === "detail" && step != null ? step : 0} popularIds={popularIds} favoriteIds={favoriteIds}
         onPlaceClick={openPlace} directions={directionsMap}
         following={following} locationStatus={locationStatus} />
       {navLeg && !navHidden && <NavBanner leg={navLeg} mode={navMode} entry={navEntry} steps={navList} index={navFollow.index}
@@ -618,6 +624,7 @@ export default function Home() {
             savingOuting={savingOuting} saveFeedback={saveFeedback}/>
         : view === "detail" && walk
         ? <PlanDetail walk={walk} stats={stats} suggestData={suggestData} step={step} complete={complete} selected={selected}
+            favorite={favoriteIds.has(walk.id)} onFavorite={() => updateProfile(old => ({ favorites: toggleFavorite(old.favorites, walk.id) }))}
             onDirections={openDirections}
             onBack={() => { changeRoute(null); setView("list"); collapseSheet(); }}
             onSelectStop={index => { selectStop(index); collapseSheet(); }}
@@ -650,6 +657,7 @@ export default function Home() {
               onDone={ranking => updateProfile({ ranking })}/>}/>
         : <RouteList walks={availableWalks} selectedId={selectedWalkId} status={walksStatus} onOpen={openWalk}
             places={placeResults} placesLoading={placeSearch.loading} onPickPlace={pickPlace}
+            tab={listTab} onTab={setListTab} favoriteIds={favoriteIds}
             filtered={anyActive(filters)} onClear={() => setFilters(emptyFilters)}
             filterBar={<RouteFilters filters={filters} onChange={setFilters} counts={counts}/>}/>}
     </section>

@@ -13,6 +13,7 @@
   --route-casing: #FFFFFF;
   --stop: #1B2A4A;
   --stop-ring: #4A90E2;
+  --favorite: #E8559A; /* hearted walks: the heart and their route on the map (ROUTE_THEME.favorite) */
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -869,3 +870,38 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 .poi-marker:hover .poi-dot, .poi-marker:focus-visible .poi-dot { transform: scale(1.12); }
 .zoom-names .poi-name.poi-name-hidden { display: none; }
 .poi-marker.poi-hidden { display: none; }
+
+/* park and T station names: ours from zoom 15, always shown, on top of routes and markers */
+.top-label { display: block; font-size: 12px; font-weight: 800; letter-spacing: -.01em; -webkit-text-stroke: 3px #F4F4F2; paint-order: stroke fill; }
+.park-label { color: #1E7A3A; }
+.t-label { display: flex; align-items: center; gap: 4px; color: var(--ink); }
+.t-label::before { content: "T"; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #fff; color: var(--ink);
+  border: 2px solid var(--ink); box-sizing: border-box; font: 900 10px/1 Arial, Helvetica, sans-serif; -webkit-text-stroke: 0; } /* the MBTA's T */
+.poi-marker.is-park .poi-name { display: none !important; }
+.top-label.top-hidden { display: none; }
+
+/* water and natural features (ours, on top of routes): italic like a map's water names */
+.feature-label { font-size: 13px; font-weight: 700; font-style: italic; letter-spacing: .01em; }
+.water-label { color: #5E7C92; }
+.land-label { color: #6b6d66; font-size: 14px; }
+.zoom-features .feature-label { display: block; }
+
+/* favorites: heart button (like YouTube / X), list tabs, heart on cards */
+.plan-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.plan-title-row h2 { flex: 1; min-width: 0; }
+.heart-button { position: relative; display: grid; place-items: center; flex: 0 0 42px; height: 42px; margin-top: 2px; padding: 0; border: 1px solid var(--line);
+  border-radius: 50%; background: #fff; color: #6b6d66; transition: color .15s, border-color .15s, background .15s; }
+.heart-button:hover { color: var(--favorite); border-color: #F5C2D9; }
+.heart-button.on { color: var(--favorite); border-color: #F5C2D9; background: #FDEEF5; }
+.heart-button.pop svg { animation: heart-pop .4s cubic-bezier(.2, 1.6, .4, 1); }
+.heart-button.pop::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--favorite); animation: heart-burst .45s ease-out forwards; pointer-events: none; }
+@keyframes heart-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes heart-burst { from { transform: scale(.8); opacity: .9; } to { transform: scale(1.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .heart-button.pop svg, .heart-button.pop::after { animation: none; } }
+
+.list-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 14px; background: #f1f0eb; }
+.list-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border: 0; border-radius: 10px; background: none;
+  color: var(--muted); font-weight: 800; font-size: .92rem; }
+.list-tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgb(33 35 32 / .12); }
+.list-tab-count { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--favorite); color: #fff; font-size: .72rem; }
+.route-card-heart { display: inline-block; margin-left: 6px; vertical-align: -2px; color: var(--favorite); }

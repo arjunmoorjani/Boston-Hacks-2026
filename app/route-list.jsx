@@ -6,7 +6,7 @@ import { Icon } from "./icons";
 
 export const LINES = [
   { id: "Red", color: "#DA291C" },
-  { id: "Orange", color: "#ED8B00", darkText: true },
+  { id: "Orange", color: "#ED8B00" }, // white text, like the other lines
   { id: "Green", color: "#00843D" },
   { id: "Blue", color: "#003DA5" },
   { id: "Silver", color: "#7C878E" },
@@ -49,9 +49,21 @@ function PlaceResults({ places, loading, onPick }) {
   </section>;
 }
 
-export function RouteList({ walks, selectedId, onOpen, status, filterBar, filtered, onClear, places = [], placesLoading = false, onPickPlace }) {
+// "All walks | Favorites" switch above the list (the map shows the same set).
+function ListTabs({ tab, onTab, favoriteCount }) {
+  return <div className="list-tabs" role="tablist" aria-label="Which walks">
+    <button type="button" role="tab" aria-selected={tab === "all"} onClick={() => onTab("all")}>All walks</button>
+    <button type="button" role="tab" aria-selected={tab === "favorites"} onClick={() => onTab("favorites")}>
+      Favorites{favoriteCount > 0 && <span className="list-tab-count">{favoriteCount}</span>}
+    </button>
+  </div>;
+}
+
+export function RouteList({ walks, selectedId, onOpen, status, filterBar, filtered, onClear, places = [], placesLoading = false, onPickPlace,
+  tab = "all", onTab, favoriteIds = new Set() }) {
   return <section className="route-list" aria-labelledby="more-walks">
     <h2 id="more-walks" className="list-title">Explore Boston <span>{walks.length} {walks.length === 1 ? "walk" : "walks"}</span></h2>
+    {onTab && <ListTabs tab={tab} onTab={onTab} favoriteCount={favoriteIds.size}/>}
     {status && <p className="routes-status" role="status">{status}</p>}
     {filterBar}
     <PlaceResults places={places} loading={placesLoading} onPick={onPickPlace}/>
@@ -61,7 +73,10 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
         const tLine = lineInfo(walk.tLines?.[0]);
         return <li key={walk.id}>
           <button type="button" className="route-card" aria-pressed={walk.id === selectedId} onClick={() => onOpen(walk.id)}>
-            <span className="route-card-title">{walk.title}</span>
+            <span className="route-card-title">{walk.title}
+              {favoriteIds.has(walk.id) && <svg className="route-card-heart" width="15" height="15" viewBox="0 0 24 24" aria-label="Favorite">
+                <path d="M12 20.5s-7.5-4.6-7.5-10.6A4.4 4.4 0 0 1 12 7.1a4.4 4.4 0 0 1 7.5 2.8c0 6-7.5 10.6-7.5 10.6z" fill="currentColor"/></svg>}
+            </span>
             <span className="route-card-meta">{summary(walk)} · {walk.area}</span>
             {walk.tStation && <span className="t-chip" style={{ background: tLine?.color ?? "#575b53", color: tLine?.darkText ? "#212320" : "#fff" }}>
               <Icon name="train" size={14}/>{walk.tStation}
@@ -70,7 +85,8 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
         </li>;
       })}
     </ul>
-    {!walks.length && <p className="route-empty">{filtered ? "No walks match these filters." : "No walks yet."}
+    {!walks.length && tab === "favorites" && !filtered && <p className="route-empty">No favorites yet. Open a walk and tap the heart to save it here.</p>}
+    {!walks.length && !(tab === "favorites" && !filtered) && <p className="route-empty">{filtered ? "No walks match these filters." : "No walks yet."}
       {filtered && <button type="button" className="cancel" onClick={onClear}>Clear filters</button>}</p>}
   </section>;
 }

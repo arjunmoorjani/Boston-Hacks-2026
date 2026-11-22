@@ -5,6 +5,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "./icons";
+import { HeartButton } from "./heart-button";
 import { distanceLabel, minutesLabel } from "../lib/directions.mjs";
 import { LEG_MODES, LONG_WALK_M, navSteps } from "../lib/legs.mjs";
 import { LINES, lineFamily, duration, costLabel } from "./route-list";
@@ -63,7 +64,7 @@ function LegRow({ leg, current, onMode, onSteps }) {
 const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
 
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, onDirections,
-  onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing, legs = [], travel, onLegMode, onLegSteps, navHidden, onShowNav }) {
+  onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing, legs = [], travel, onLegMode, onLegSteps, navHidden, onShowNav, favorite = false, onFavorite }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
   const label = [theme, walk.area].filter(Boolean).join(" · ");
@@ -85,7 +86,10 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
   return <div className="plan-detail">
     <button type="button" className="back-link" onClick={onBack}><Icon name="arrowLeft" size={18}/>All walks</button>
     <div className="plan-label">{label}</div>
-    <h2 id="walk-title">{walk.title}</h2>
+    <div className="plan-title-row">
+      <h2 id="walk-title">{walk.title}</h2>
+      {onFavorite && <HeartButton on={favorite} onToggle={onFavorite} label={walk.title}/>}
+    </div>
     <p className="plan-meta">{meta}</p>
 
     {walking && <div className="walk-progress" role="status">
