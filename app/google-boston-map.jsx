@@ -14,6 +14,7 @@ import { Icon } from "./icons";
 // size usually allows fewer: about 10 / 15 / 24 places and 4 / 5 / 9 park names).
 const MAX_PLACES = [15, 25, 40];
 const MAX_PARK_NAMES = [6, 10, 15];
+const MAX_PLACES_FAR_OUT = 10; // logger maps below zoom 15
 
 // Routes and transit lines top out at 24. Keep every name in one protected layer above them.
 const MAP_LABEL_Z_INDEX = 60;
@@ -403,7 +404,10 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       }
       topShown.current = nowShown;
 
-      const room = Math.min(MAX_PLACES[tier], Math.max(4, Math.round(area / [22000, 14000, 9000][tier])));
+      // Logger maps show icons farther out than zoom 15 too: fewer of them there, and parks count like any place.
+      const farOut = zoom < PLACES_MIN_ZOOM;
+      const room = farOut ? Math.min(MAX_PLACES_FAR_OUT, Math.max(4, Math.round(area / 30000)))
+        : Math.min(MAX_PLACES[tier], Math.max(4, Math.round(area / [22000, 14000, 9000][tier])));
       const withNames = zoom >= LABEL_ZOOM;
       const taken = [...fixed];
       const union = (a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) });
@@ -413,14 +417,14 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         const button = placeMarkers.current.get(place.placeId)?.div.firstElementChild;
         return { place, button, distance: button ? fromCenter(button.querySelector(".poi-dot").getBoundingClientRect()) : Infinity };
       }).filter(item => item.button);
-      items.sort((a, b) => ((b.place.icon === "park") - (a.place.icon === "park"))
+      items.sort((a, b) => (farOut ? 0 : (b.place.icon === "park") - (a.place.icon === "park"))
         || (minZoomFor(a.place) - minZoomFor(b.place)) || (a.distance - b.distance));
       for (const { place, button } of items) {
         const name = button.querySelector(".poi-name");
         button.classList.remove("poi-hidden");
         name.classList.remove("poi-name-hidden");
         const dot = button.querySelector(".poi-dot").getBoundingClientRect();
-        if (place.icon === "park") {
+        if (place.icon === "park" && !farOut) {
           // a park's icon goes with its name: shown together, or (when a bigger park's name is in the way) not at all
           if (ourTopNames && !nowShown.has(place.placeId)) { button.classList.add("poi-hidden"); continue; }
           taken.push(dot); // parks don't use up the room for other places
@@ -430,8 +434,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         const unit = nameBox?.width ? union(dot, nameBox) : dot;
         const gap = withNames ? 6 : 10;
         if (!onScreen(unit)) continue; // off screen: doesn't use up the room
-        // (logger maps keep every icon: no room limit or overlap hiding there)
-        if (!alwaysShowPlaces && (count >= room || taken.some(other => overlaps(unit, other, gap)))) { button.classList.add("poi-hidden"); continue; }
+        if (count >= room || taken.some(other => overlaps(unit, other, gap))) { button.classList.add("poi-hidden"); continue; }
         taken.push(unit);
         count += 1;
       }
@@ -439,7 +442,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const frame = requestAnimationFrame(declutter);
     const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
     return () => { cancelAnimationFrame(frame); idle.remove(); };
-  }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames, alwaysShowPlaces]);
+  }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames]);
 
   // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
   useEffect(() => {
