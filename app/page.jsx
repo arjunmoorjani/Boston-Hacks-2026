@@ -124,7 +124,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const popularIds = useMemo(() => popularWalkIds(catalogWalks), [catalogWalks]);
   const baseWalk = useMemo(() => {
     const stored = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
-    if (!stored || stored.category !== "Logged excursion") return stored;
+    if (!stored || stored.category !== "Logged route") return stored;
     const related = profile.completions.filter(item => item.walkId === stored.id);
     const activity = related.find(item => item.photoPaths?.length || item.activityId || item.comments
       || item.priceCategory || Number.isFinite(item.peopleWith)) ?? related[0];
@@ -453,17 +453,17 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       name: location.label,
       address: location.address,
       point: location.point,
-      note: index === 0 ? "Excursion starting point." : "A stop on this excursion.",
+      note: index === 0 ? "Route starting point." : "A stop on this route.",
     }));
-    const cardMeta = withExcursionCardMeta({ id: walkId, category: "Logged excursion", stops, minutes: route.minutes }, catalogWalks);
+    const cardMeta = withExcursionCardMeta({ id: walkId, category: "Logged route", stops, minutes: route.minutes }, catalogWalks);
     const walk = {
       ...route,
       id: walkId,
       title: name,
       area: cardMeta.area,
-      category: "Logged excursion",
+      category: "Logged route",
       symbol: "route",
-      description: comments || "A previous excursion you logged.",
+      description: comments || "A previous route you logged.",
       completedAt: new Date(`${date}T12:00:00`).toISOString(),
       priceCategory,
       peopleWith,
@@ -481,7 +481,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       walkId,
       title: name,
       area: cardMeta.area,
-      category: "Logged excursion",
+      category: "Logged route",
       tStation: cardMeta.tStation,
       tLines: cardMeta.tLines,
       path: route.path,
@@ -564,10 +564,19 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     return true;
   }
 
+  function openAlbumRoute(route) {
+    const completion = profile.completions.find(item => item.activityId === route.id);
+    const record = customWalks.find(item => item.activityId === route.id);
+    if (completion && openWalk(completion.walkId, true, completion.id)) return true;
+    if (record && openWalk(record.id, true)) return true;
+    const shared = route.sharedRouteId && catalogWalks.find(item => item.popularRouteId === route.sharedRouteId);
+    return shared ? openWalk(shared.id, true) : false;
+  }
+
   async function deleteSelectedActivity() {
     const activity = profile.completions.find(item => item.id === selectedCompletionId);
     if (!activity || !walk) throw new Error("This activity could not be found.");
-    const logged = walk.category === "Logged excursion";
+    const logged = walk.category === "Logged route";
     const activityId = activity.activityId ?? (logged ? walk.activityId : null);
     if (activityId) {
       await deleteLoggedExcursion({ activityId, photoPaths: activity.photoPaths ?? walk.photoPaths ?? [] });
@@ -830,7 +839,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
             navHidden={navHidden && Boolean(navLeg)} onShowNav={() => { setNavHidden(false); collapseSheet(); }}
             onDeleteActivity={selectedCompletionId ? deleteSelectedActivity
               : profile.customWalks.some(item => item.id === walk.id) ? deleteSelectedCustomWalk : null}
-            deleteLabel={walk.category === "Logged excursion" ? "Delete excursion"
+            deleteLabel={walk.category === "Logged route" ? "Delete route"
               : profile.customWalks.some(item => item.id === walk.id) ? "Delete plan" : "Delete activity"}
             routing={<>
                 {planNotice && <p className="plan-notice" role="status"><Icon name="check" size={16}/>{planNotice}</p>}
@@ -868,17 +877,24 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     </section>
     {placeProfile && <PlaceProfile key={placeProfile.placeId} placeId={placeProfile.placeId} fallback={placeProfile.fallback}
       onClose={closePlace} addLabel={addLabelFor(placeProfile.placeId)}
-      onDirections={place => openDirections({ name: place.name, point: place.point, placeId: placeProfile.placeId })}
-      onAdd={place => addPlace({
-        osm_id: `google:${placeProfile.placeId}`, placeId: placeProfile.placeId, name: place.name,
-        latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
-        tags: { description: place.summary ?? "" },
-      })}/>}
+      onDirections={place => {
+        setShowProfile(false);
+        openDirections({ name: place.name, point: place.point, placeId: placeProfile.placeId });
+      }}
+      onAdd={place => {
+        setShowProfile(false);
+        addPlace({
+          osm_id: `google:${placeProfile.placeId}`, placeId: placeProfile.placeId, name: place.name,
+          latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
+          tags: { description: place.summary ?? "" },
+        });
+      }}/>}
     {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={allWalks} onClose={closeProfile}
       avatarPath={userId ? accountAvatarPath : profile.avatarPath ?? null}
       avatarUrl={userId ? accountAvatarUrl : presetAvatarSource(profile.avatarPath)} canUploadAvatar={Boolean(userId)}
       onSaveProfile={saveProfileSettings} nameLoading={nameLoading} nameError={nameError}
       onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
+      albumClient={client} onOpenAlbumRoute={openAlbumRoute} onOpenAlbumPlace={openPlace}
       onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
     <div hidden={!showLog}><LogPage visible={showLog} sharedRoutes={sharedRoutes} onLog={logPreviousExcursion}/></div>

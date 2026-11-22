@@ -71,7 +71,7 @@ function DeleteActivity({ label, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
-  const subject = label === "Delete excursion" ? "excursion" : label === "Delete plan" ? "plan" : "activity";
+  const subject = label === "Delete route" ? "route" : label === "Delete plan" ? "plan" : "activity";
 
   async function remove() {
     if (deleting) return;
@@ -108,7 +108,7 @@ function ExcursionSummary({ walk, stats }) {
   const group = Number.isFinite(walk.peopleWith)
     ? walk.peopleWith === 0 ? "Solo" : `With ${walk.peopleWith} ${walk.peopleWith === 1 ? "person" : "people"}`
     : null;
-  return <section className="activity excursion-detail-card" aria-label={`${walk.title} excursion details`}>
+  return <section className="activity excursion-detail-card" aria-label={`${walk.title} route details`}>
     <header>
       <div>
         <small>{[date, walk.area].filter(Boolean).join(" · ")}</small>
@@ -153,7 +153,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
   }, [walk, last, suggestData]);
 
   const walking = step !== null;
-  const loggedExcursion = walk.category === "Logged excursion";
+  const loggedExcursion = walk.category === "Logged route";
 
   return <div className={`plan-detail ${favorite ? "is-favorite" : ""}`}>
     <button type="button" className="back-link" onClick={onBack}><Icon name="arrowLeft" size={18}/>All walks</button>

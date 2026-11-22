@@ -10,6 +10,7 @@ import { GoogleBostonMap } from "./google-boston-map";
 import { TRAVEL_MODES } from "./directions-panel";
 import { Icon } from "./icons";
 import { matchSharedRoute } from "../lib/popular.mjs";
+import { photoStopOptions } from "../lib/route-photos.mjs";
 import { addActiveExcursionStop, loadActiveExcursionStopIds, loggedExcursionDatabaseReady, saveLoggedExcursion, startActiveExcursion, updateActiveExcursion } from "../lib/log-excursion.mjs";
 
 const BUILDER_ROUTE_IDS = new Set(["log-builder"]);
@@ -83,7 +84,7 @@ function RouteBuilderMap({ locationNumber, locations, current, route, onPick }) 
     address: location.address,
     point: location.point,
   }));
-  const walk = { id: "log-builder", title: "Excursion route", path: route.path, stops };
+  const walk = { id: "log-builder", title: "Logged route", path: route.path, stops };
   const walks = route.path.length ? [walk] : [];
   const focusPath = route.path.length ? route.path : selected.map(location => location.point);
 
@@ -115,9 +116,9 @@ function RouteBuilderMap({ locationNumber, locations, current, route, onPick }) 
     } catch {}
   }
 
-  const status = route.status === "building" ? "Building the excursion route…"
+  const status = route.status === "building" ? "Building the route…"
     : route.status === "error" ? route.error
-    : route.path.length ? "Excursion route updated."
+    : route.path.length ? "Route updated."
     : current?.point ? `Tap another place to change location ${locationNumber}.`
     : `Tap a place or anywhere on the map to choose location ${locationNumber}.`;
 
@@ -204,17 +205,17 @@ function NewExcursionForm({ onBack, onBegin, initialDraft }) {
       await startActiveExcursion(excursion);
       onBegin(excursion);
     } catch (error) {
-      setStartError(error.message || "Couldn’t start the excursion.");
+      setStartError(error.message || "Couldn’t start the route.");
     } finally {
       setStarting(false);
     }
   }
 
   return <section className="log-form-page" aria-labelledby="new-excursion-title">
-    <button type="button" className="log-form-back" disabled={starting} onClick={onBack} aria-label="Back to excursion options">← Back</button>
+    <button type="button" className="log-form-back" disabled={starting} onClick={onBack} aria-label="Back to route options">← Back</button>
     <div className="log-form-content">
       <div className="log-form-section">
-        <label id="new-excursion-title" htmlFor="new-excursion-name">Name your excursion</label>
+        <label id="new-excursion-title" htmlFor="new-excursion-name">Name your route</label>
         <input id="new-excursion-name" type="text" value={name} onChange={event => setName(event.target.value)}
           placeholder="Example: Saturday in the North End" autoComplete="off"/>
       </div>
@@ -240,7 +241,7 @@ function NewExcursionForm({ onBack, onBegin, initialDraft }) {
       </div>
       {startError && <p className="log-save-error" role="alert">{startError}</p>}
       <button type="button" className="log-finish" disabled={starting || !name.trim() || !firstStop.point || !firstStop.placeId}
-        onClick={begin}>{starting ? "Starting excursion…" : "Begin"}</button>
+        onClick={begin}>{starting ? "Starting route…" : "Begin"}</button>
     </div>
   </section>;
 }
@@ -359,7 +360,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
     try {
       await action();
     } catch (error) {
-      setSaveError(error.message || "Couldn’t update the excursion.");
+      setSaveError(error.message || "Couldn’t update the route.");
     } finally {
       busy.current = false;
       setSaving("");
@@ -376,7 +377,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
           setSavedName(trimmedName);
         } catch (error) {
           setFailedName(trimmedName);
-          throw new Error(error.message || "Couldn’t save the excursion name. Edit it to try again.");
+          throw new Error(error.message || "Couldn’t save the route name. Edit it to try again.");
         }
       });
     }, 600);
@@ -389,7 +390,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
     save("Adding stop…", async () => {
       if (!nextStop.placeId) throw new Error("Choose a searchable place or address to save this stop.");
       if (stops.some(stop => stop.placeId === nextStop.placeId)) {
-        throw new Error("This place is already a stop on the excursion.");
+        throw new Error("This place is already a stop on the route.");
       }
       const previousStop = stops.at(-1);
       const nextTrip = await fetchDirections(previousStop.point, nextStop.point, mode).catch(() => null);
@@ -404,7 +405,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
 
   function finishExcursion() {
     if (!name.trim()) return;
-    save("Finishing excursion…", async () => {
+    save("Finishing route…", async () => {
       const legs = stops.map((stop, index) => excursionLeg(
         plannedTrips[index], stops[index - 1]?.point ?? initialOrigin.current, stop.point,
       ));
@@ -412,7 +413,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
       const locationsById = new Map(stops.map(stop => [stop.placeId, stop]));
       const locations = savedIds.map(id => locationsById.get(id));
       if (locations.length !== stops.length || locations.some(stop => !stop)) {
-        throw new Error("The saved stops could not be matched to this excursion.");
+        throw new Error("The saved stops could not be matched to this route.");
       }
       const path = [];
       for (const leg of legs) {
@@ -433,11 +434,11 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
     });
   }
 
-  return <section className="log-form-page" aria-label="Active excursion">
+  return <section className="log-form-page" aria-label="Active route">
     <div className="log-form-content">
       <div className="log-form-section">
-        <input className="active-excursion-name" type="text" aria-label="Excursion name" value={name}
-          readOnly={saving === "Finishing excursion…"}
+        <input className="active-excursion-name" type="text" aria-label="Route name" value={name}
+          readOnly={saving === "Finishing route…"}
           onChange={event => {
             setFailedName(null);
             setName(event.target.value);
@@ -542,10 +543,10 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
   const canFinish = Boolean(name.trim() && locations.every(location => location.point) && route.status === "ready");
 
   return <section className="log-form-page" aria-labelledby="previous-excursion-title">
-    <button type="button" className="log-form-back" onClick={onBack} aria-label="Back to excursion options">← Back</button>
+    <button type="button" className="log-form-back" onClick={onBack} aria-label="Back to route options">← Back</button>
     <div className="log-form-content">
       <div className="log-form-section">
-        <label id="previous-excursion-title" htmlFor="excursion-name">Name your excursion</label>
+        <label id="previous-excursion-title" htmlFor="excursion-name">Name your route</label>
         <input id="excursion-name" type="text" value={name} onChange={event => setName(event.target.value)}
           placeholder="Example: Saturday in the North End" autoComplete="off"/>
       </div>
@@ -597,6 +598,8 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const previewUrls = useRef([]);
+  const photoStops = photoStopOptions(excursion.locations);
+  const photosTagged = !photoStops.length || images.every(image => image.stopPosition != null);
 
   useEffect(() => () => previewUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
 
@@ -609,7 +612,7 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
     const next = valid.slice(0, available).map(file => {
       const preview = URL.createObjectURL(file);
       previewUrls.current.push(preview);
-      return { file, preview, id: crypto.randomUUID() };
+      return { file, preview, id: crypto.randomUUID(), stopPosition: photoStops.length === 1 ? photoStops[0].position : null };
     });
     setImages(current => [...current, ...next]);
   }
@@ -623,7 +626,7 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
   }
 
   async function save() {
-    if (!date || saving) return;
+    if (!date || saving || !photosTagged) return;
     setSaving(true);
     setError("");
     try {
@@ -636,11 +639,11 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
         priceCategory,
         peopleWith,
         comments,
-        images: images.map(image => image.file),
+        images: images.map(({ id, file, stopPosition }) => ({ id, file, stopPosition })),
       });
       onSaved({ ...excursion, date, priceCategory, peopleWith, comments: comments.trim(), ...stored });
     } catch (saveError) {
-      setError(saveError?.message || "Couldn’t save this excursion.");
+      setError(saveError?.message || "Couldn’t save this route.");
     } finally {
       setSaving(false);
     }
@@ -651,7 +654,7 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
     <div className="log-details-content">
       <header>
         <p>Almost done</p>
-        <h1 id="excursion-details-title">Add excursion details</h1>
+        <h1 id="excursion-details-title">Add route details</h1>
       </header>
 
       <label className="log-detail-field" htmlFor="excursion-date">
@@ -661,7 +664,7 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
 
       <fieldset className="log-price-field">
         <legend>How much did it cost?</legend>
-        <div role="radiogroup" aria-label="Excursion price">
+        <div role="radiogroup" aria-label="Route price">
           {[["FREE", "Free"], ["$", "$"], ["$$", "$$"], ["$$$", "$$$"]].map(([value, label]) =>
             <button key={value} type="button" role="radio" aria-checked={priceCategory === value}
               className={priceCategory === value ? "selected" : ""} onClick={() => setPriceCategory(value)}>{label}</button>)}
@@ -687,21 +690,34 @@ function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
           <p>Optional · up to 8 images, 10 MB each</p>
         </div>
         <label className="log-photo-picker">
-          <input type="file" accept="image/*" multiple onChange={addImages}/>
+          <input type="file" accept="image/*" multiple disabled={saving} onChange={addImages}/>
           <span>+ Add images</span>
         </label>
         {images.length > 0 && <div className="log-photo-grid">
-          {images.map(image => <figure key={image.id}>
-            <img src={image.preview} alt="Excursion upload preview"/>
-            <button type="button" onClick={() => removeImage(image.id)} aria-label="Remove image">×</button>
-          </figure>)}
+          {images.map((image, index) => <div className="log-photo-item" key={image.id}>
+            <figure>
+              <img src={image.preview} alt={`Route photo ${index + 1} preview`}/>
+              <button type="button" onClick={() => removeImage(image.id)} disabled={saving} aria-label={`Remove photo ${index + 1}`}>×</button>
+            </figure>
+            {photoStops.length > 0 && <label className="log-photo-stop">
+              Photo {index + 1} stop
+              <select value={image.stopPosition ?? ""} disabled={saving} onChange={event => {
+                const stopPosition = event.target.value ? Number(event.target.value) : null;
+                setImages(current => current.map(item => item.id === image.id ? { ...item, stopPosition } : item));
+              }}>
+                <option value="">Choose a stop</option>
+                {photoStops.map(stop => <option key={stop.position} value={stop.position}>{stop.label}</option>)}
+              </select>
+            </label>}
+          </div>)}
         </div>}
-        {!loggedExcursionDatabaseReady && <p className="log-database-note">Connect Supabase to upload images. The excursion can still be saved locally without them.</p>}
+        {!photosTagged && <p className="log-database-note">Choose the stop where you took each photo.</p>}
+        {!loggedExcursionDatabaseReady && <p className="log-database-note">Connect Supabase to upload images. You can still save the route without photos.</p>}
       </section>
 
       {error && <p className="log-save-error" role="alert">{error}</p>}
-      <button type="button" className="log-save-excursion" disabled={!date || saving} onClick={save}>
-        {saving ? "Saving excursion…" : "Save excursion"}
+      <button type="button" className="log-save-excursion" disabled={!date || saving || !photosTagged} onClick={save}>
+        {saving ? "Saving route…" : "Save route"}
       </button>
     </div>
   </section>;
@@ -732,18 +748,18 @@ export function LogPage({ onLog, visible, sharedRoutes = [] }) {
 
   if (page === "saved") return <section className="log-page" aria-labelledby="logged-title">
     <div className="log-page-content log-saved">
-      <h1 id="logged-title">Excursion logged</h1>
+      <h1 id="logged-title">Route logged</h1>
       <p>Your route is now in your Profile activity.</p>
-      <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("menu")}>Log another excursion</button>
+      <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("menu")}>Log another route</button>
     </div>
   </section>;
 
   return <section className="log-page" aria-labelledby="log-page-title">
     <div className="log-page-content">
-      <h1 id="log-page-title">Log an excursion</h1>
+      <h1 id="log-page-title">Log a route</h1>
       <div className="log-page-actions">
-        <button type="button" className="log-page-action" onClick={() => setPage("previous")}>Log a previous excursion</button>
-        <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("new")}>Start a new excursion</button>
+        <button type="button" className="log-page-action" onClick={() => setPage("previous")}>Log a previous route</button>
+        <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("new")}>Start a new route</button>
       </div>
     </div>
   </section>;

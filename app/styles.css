@@ -1077,3 +1077,42 @@ html.profile-open, html.profile-open body { overflow: hidden; }
 }
 #active-stop-form:not([hidden]) { display: grid; gap: 11px; }
 .log-photo-picker:focus-within { outline: 2px solid var(--route); outline-offset: 2px; }
+
+/* Route photo tags and the profile album */
+.log-photo-item { display: grid; min-width: 0; gap: 6px; align-content: start; }
+.log-photo-stop { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.log-photo-stop select {
+  min-height: 40px; width: 100%; padding: 4px 6px; border: 1px solid #b9b9b0;
+  border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit;
+}
+.profile-tabs { margin-bottom: 16px; }
+.profile-tab-panels { touch-action: pan-y; }
+.album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; margin: 0; padding: 0; list-style: none; }
+.album-grid li { min-width: 0; }
+.album-tile {
+  display: grid; place-items: center; width: 100%; aspect-ratio: 1;
+  overflow: hidden; border: 1px solid var(--line); border-radius: 12px; padding: 0;
+  background: #e9edf1; color: var(--route-dark);
+}
+.album-tile img { width: 100%; height: 100%; object-fit: cover; }
+.album-tile-caption { display: grid; gap: 2px; padding: 5px 2px; font-size: .76rem; line-height: 1.25; }
+.album-tile-caption > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.album-tile-caption span { color: var(--muted); }
+.album-empty { padding: 18px; border: 1px dashed #cdcfcf; border-radius: 14px; color: var(--muted); }
+.album-load { display: block; margin: 14px auto 0; }
+.album-dialog {
+  width: min(600px, calc(100vw - 28px)); max-height: 90svh; padding: 0;
+  border: 0; border-radius: 18px; background: var(--paper); color: var(--ink); overscroll-behavior: contain;
+}
+.album-dialog::backdrop { background: rgb(16 27 42 / .72); }
+.album-dialog > header { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 16px; }
+.album-dialog > header h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.album-dialog > header button { flex: 0 0 auto; }
+.album-image { display: block; width: 100%; max-height: 59svh; object-fit: contain; background: #172336; }
+.album-photo-details { display: grid; gap: 12px; padding: 15px 16px; }
+.album-photo-details p, .album-photo-details h3, .album-photo-details ol { margin: 0; }
+.album-photo-details strong { margin-right: 5px; }
+.album-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.album-actions button { min-height: 42px; }
+.album-saved-route li + li { margin-top: 7px; }
+.album-route-sketch { width: min(100%, 210px); max-height: 180px; background: #eef5ff; border-radius: 12px; }

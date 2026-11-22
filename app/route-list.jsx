@@ -116,7 +116,7 @@ function RouteSketch({ walk, favorite }) {
 function CardPhoto({ walk, favorite }) {
   const box = useRef(null);
   const [photo, setPhoto] = useState(null);
-  const userExcursion = walk.category === "Logged excursion" || String(walk.id).startsWith("logged:");
+  const userExcursion = walk.category === "Logged route" || String(walk.id).startsWith("logged:");
   const placeIds = (walk.stops ?? []).map(stop => stop.placeId).filter(Boolean);
   const photoPaths = walk.photoPaths ?? [];
   const key = userExcursion ? `uploaded:${walk.activityId ?? ""}:${photoPaths.join(",")}` : placeIds.join(",");

@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
+import { PhotoAlbum } from "./photo-album";
 import { walkStats } from "./walks";
 import { sampleActivity } from "../lib/profile-store.mjs";
 import { Inserter } from "../lib/ranking.mjs";
@@ -210,7 +211,8 @@ export function RankPrompt({ newId, ranking, titleOf, onDone }) {
 
 // ---------- page ----------
 export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAvatar, onClose, onSaveProfile,
-  nameLoading, nameError, onSignOut, onExitGuest, savingOuting, onOpenWalk, onSample, onReset }) {
+  nameLoading, nameError, onSignOut, onExitGuest, savingOuting, onOpenWalk, onSample, onReset,
+  albumClient, onOpenAlbumRoute, onOpenAlbumPlace }) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
   const [draftAvatarPath, setDraftAvatarPath] = useState(avatarPath);
@@ -219,7 +221,34 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
   const [signingOut, setSigningOut] = useState(false);
   const [accountError, setAccountError] = useState("");
   const close = useRef(null);
+  const tabList = useRef(null);
+  const swipeStart = useRef(null);
+  const [profileTab, setProfileTab] = useState("activity");
   const { completions, ranking } = profile;
+
+  function selectTab(tab, focus = false) {
+    setProfileTab(tab);
+    if (focus) tabList.current?.querySelector(`#profile-tab-${tab}`)?.focus();
+  }
+
+  function onTabKey(event) {
+    const tabs = { Home: "activity", End: "album", ArrowLeft: profileTab === "album" ? "activity" : "album",
+      ArrowRight: profileTab === "activity" ? "album" : "activity" };
+    const next = tabs[event.key];
+    if (!next) return;
+    event.preventDefault();
+    selectTab(next, true);
+  }
+
+  function handleSwipe(event) {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    const end = event.changedTouches[0];
+    if (!start || !end) return;
+    const dx = end.clientX - start.clientX;
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(end.clientY - start.clientY) * 1.4) return;
+    selectTab(dx < 0 ? "album" : "activity");
+  }
 
   useEffect(() => () => {
     if (draftAvatarFile?.preview) URL.revokeObjectURL(draftAvatarFile.preview);
@@ -227,7 +256,9 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
 
   useEffect(() => {
     close.current?.focus();
-    const onKey = event => { if (event.key === "Escape") onClose(); };
+    const onKey = event => {
+      if (event.key === "Escape" && !document.querySelector("dialog[open]")) onClose();
+    };
     document.addEventListener("keydown", onKey);
     document.documentElement.classList.add("profile-open");
     return () => { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("profile-open"); };
@@ -380,7 +411,22 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
         </div>
       </section>
 
-      <section className="profile-feed" aria-labelledby="feed-title">
+      <section className="profile-feed" aria-label="Profile activity and photos">
+        <div ref={tabList} className="list-tabs profile-tabs" role="tablist" aria-label="Profile sections" onKeyDown={onTabKey}>
+          {[["activity", "Activity"], ["album", "Photo album"]].map(([id, label]) =>
+            <button key={id} id={`profile-tab-${id}`} type="button" role="tab" aria-selected={profileTab === id}
+              aria-controls={`profile-panel-${id}`} tabIndex={profileTab === id ? 0 : -1}
+              onClick={() => selectTab(id)}>{label}</button>)}
+        </div>
+        <div className="profile-tab-panels"
+          onTouchStart={event => {
+            if (event.touches.length !== 1 || event.target.closest("dialog")) { swipeStart.current = null; return; }
+            const { clientX, clientY } = event.touches[0];
+            swipeStart.current = { clientX, clientY };
+          }}
+          onTouchEnd={handleSwipe} onTouchCancel={() => { swipeStart.current = null; }}>
+        <div id="profile-panel-activity" role="tabpanel" aria-labelledby="profile-tab-activity" hidden={profileTab !== "activity"}
+          tabIndex={0}>
         <h2 id="feed-title">Activity</h2>
         {completions.length === 0
           ? <div className="feed-empty">
@@ -433,9 +479,17 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
                 </article>
               </li>})}
             </ol>}
+        </div>
+        <div id="profile-panel-album" role="tabpanel" aria-labelledby="profile-tab-album" hidden={profileTab !== "album"}
+          tabIndex={0}>
+          <h2>Photo album</h2>
+          {profileTab === "album" && <PhotoAlbum client={albumClient} walks={walks} onOpenRoute={onOpenAlbumRoute}
+            onOpenPlace={onOpenAlbumPlace}/>}
+        </div>
+        </div>
       </section>
 
-      {completions.length > 0 && <p className="profile-footer">
+      {profileTab === "activity" && completions.length > 0 && <p className="profile-footer">
         Saved in this browser only.{" "}
         <button type="button" onClick={() => { if (window.confirm("Clear your activity and ranking? Your saved plans stay.")) onReset(); }}>Clear activity</button>
       </p>}
