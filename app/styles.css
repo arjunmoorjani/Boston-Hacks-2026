@@ -28,7 +28,7 @@ button:focus-visible, a:focus-visible, .map:focus-visible { outline: 3px solid #
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(ellipse at 20% 0%, #fff0b8, transparent 56%), #f8f7f2;
+  background: radial-gradient(ellipse at 20% 0%, #c8e2ff, transparent 56%), #f3f8ff;
 }
 .welcome-card {
   display: grid;
