@@ -602,6 +602,15 @@ html.log-open, html.log-open body { overflow: hidden; }
 }
 .log-add-location:hover { background: #f3f6fd; }
 .log-add-location:disabled { border-color: #d8d7d0; color: #aaa9a2; cursor: not-allowed; }
+.log-location-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.log-remove-location {
+  display: grid; place-items: center; flex: none;
+  width: 36px; height: 36px; padding: 0;
+  border: 1px solid #d8d7d0; border-radius: 50%;
+  background: #fff; color: var(--ink);
+}
+.log-remove-location:hover { border-color: #c0392b; color: #c0392b; background: #fdf2f1; }
+.log-remove-location svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .log-finish {
   min-height: 58px;
   padding: 14px 22px;

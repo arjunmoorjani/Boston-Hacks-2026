@@ -365,7 +365,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   useEffect(() => {
     if (!context || (!visiblePlaces.length && !topNames.length)) return;
     const overlaps = (a, b, gap) => a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top;
+    let frame = 0;
     const declutter = () => {
+      if (!container.current) return; // the map closed before this frame ran
       const fixed = [];
       const mapBox = container.current.getBoundingClientRect();
       const area = mapBox.width * mapBox.height;
@@ -439,8 +441,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         count += 1;
       }
     };
-    const frame = requestAnimationFrame(declutter);
-    const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
+    frame = requestAnimationFrame(declutter);
+    const idle = context.map.addListener("idle", () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(declutter); });
     return () => { cancelAnimationFrame(frame); idle.remove(); };
   }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames]);
 

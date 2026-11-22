@@ -312,7 +312,9 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
   }, [arrivedCount, destination, location, visible]);
 
   useEffect(() => {
-    if (!routeStart || !destination || !visible) return;
+    // All stops reached: nothing to look up (and a lookup that was cancelled on arrival can't leave its message behind)
+    if (!destination) { setTripStatus(""); return; }
+    if (!routeStart || !visible) return;
     let active = true;
     setTripStatus("Finding your route…");
     fetchDirections(routeStart, destination.point, mode).then(route => {
@@ -517,6 +519,15 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
     setLegModes(current => [...current, "WALKING"]);
   }
 
+  // Remove a stop (only while more than 2 are left). The travel mode into it goes with it; for the first stop,
+  // the mode into the second one does (the new first stop has no "how did you get here").
+  function removeLocation(id) {
+    const index = locations.findIndex(location => location.id === id);
+    if (index < 0 || locations.length <= 2) return;
+    setLocations(current => current.filter(location => location.id !== id));
+    setLegModes(current => current.filter((_, modeIndex) => modeIndex !== Math.max(index - 1, 0)));
+  }
+
   function setLegMode(index, mode) {
     setLegModes(current => current.map((value, modeIndex) => modeIndex === index ? mode : value));
   }
@@ -548,7 +559,13 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
               </button>)}
             </div>
           </div>}
-          <label htmlFor={fieldId}>{number}. {index === 0 ? "where did you start?" : "where did you go next?"}</label>
+          <div className="log-location-heading">
+            <label htmlFor={fieldId}>{number}. {index === 0 ? "where did you start?" : "where did you go next?"}</label>
+            {locations.length > 2 && <button type="button" className="log-remove-location"
+              onClick={() => removeLocation(location.id)} aria-label={`Remove location ${number}${location.label ? `, ${location.label}` : ""}`}>
+              <Icon name="close" size={16}/>
+            </button>}
+          </div>
           <PlaceField fieldId={fieldId} location={location} number={number}
             onChange={patch => updateLocation(location.id, patch)}/>
           <p className="log-map-prompt">Or pick location {number} on the map</p>
