@@ -109,21 +109,40 @@ function RouteSketch({ walk, favorite }) {
   </svg>;
 }
 
-// A photo of the walk's first stop that has one (from Google Places), loaded when the card scrolls into view.
-// Until it loads, or if no stop has a photo, the card shows the route drawing instead.
+// Premade walks use a Google photo from one of their stops. Logged excursions use only a photo the user uploaded.
+// Until it loads, or when there is no permitted photo, the card shows the route drawing instead.
 function CardPhoto({ walk, favorite }) {
   const box = useRef(null);
   const [photo, setPhoto] = useState(null);
+  const userExcursion = walk.category === "Logged excursion" || String(walk.id).startsWith("logged:");
   const placeIds = (walk.stops ?? []).map(stop => stop.placeId).filter(Boolean);
-  const key = placeIds.join(",");
+  const photoPaths = walk.photoPaths ?? [];
+  const key = userExcursion ? `uploaded:${walk.activityId ?? ""}:${photoPaths.join(",")}` : placeIds.join(",");
 
   useEffect(() => {
     setPhoto(null);
-    if (!placeIds.length || !box.current) return;
+    if ((!userExcursion && !placeIds.length) || (userExcursion && !photoPaths.length && !walk.activityId) || !box.current) return;
     let active = true;
     const observer = new IntersectionObserver(async entries => {
       if (!entries.some(entry => entry.isIntersecting)) return;
       observer.disconnect();
+      if (userExcursion) {
+        try {
+          const { supabase } = await import("../lib/supabase.mjs");
+          let paths = photoPaths;
+          if (!paths.length && walk.activityId) {
+            const { data, error } = await supabase.from("activity_photos").select("storage_path")
+              .eq("activity_id", walk.activityId).limit(1);
+            if (error) throw error;
+            paths = (data ?? []).map(item => item.storage_path).filter(Boolean);
+          }
+          if (!paths.length) return;
+          const { data, error } = await supabase.storage.from("activity-photos").createSignedUrl(paths[0], 60 * 60);
+          if (error) throw error;
+          if (active && data?.signedUrl) setPhoto({ src: data.signedUrl });
+        } catch {}
+        return;
+      }
       for (const placeId of placeIds.slice(0, 3)) { // first stop with a photo (most have one)
         try {
           const found = await fetchPlacePhoto(placeId);
@@ -133,7 +152,7 @@ function CardPhoto({ walk, favorite }) {
     }, { rootMargin: "200px" });
     observer.observe(box.current);
     return () => { active = false; observer.disconnect(); };
-  }, [key]);
+  }, [key, userExcursion]);
 
   return <span className="route-card-media" ref={box}>
     {photo ? <>

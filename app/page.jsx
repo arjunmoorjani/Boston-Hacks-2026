@@ -31,6 +31,7 @@ import { anyActive, applyFilters, categoryCounts, emptyFilters, matchesQuery } f
 import { buildSuggestData } from "../lib/suggest-data.mjs";
 import { completionFor, emptyProfile, guestDisplayName, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
 import { presetAvatarSource, resolveProfileAvatar, saveAccountProfile } from "../lib/profile-avatar.mjs";
+import { withExcursionCardMeta, withNearestTStop } from "../lib/excursion-card-meta.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -98,20 +99,22 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   legRoutesRef.current = legRoutes;
   const [navIndex, setNavIndex] = useState(0);    // the turn-by-turn step you're on during a walk
   const [navHidden, setNavHidden] = useState(false);
-  const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
-  const allWalks = useMemo(() => [...walks, ...profile.customWalks], [walks, profile.customWalks]);
+  const catalogWalks = useMemo(() => walks.map(item => withNearestTStop(item, walks)), [walks]);
+  const suggestData = useMemo(() => buildSuggestData(catalogWalks), [catalogWalks]);
+  const customWalks = useMemo(() => profile.customWalks.map(item => withExcursionCardMeta(item, catalogWalks)), [profile.customWalks, catalogWalks]);
+  const allWalks = useMemo(() => [...catalogWalks, ...customWalks], [catalogWalks, customWalks]);
   // Catalog walks get every filter; your own plans only the search (they have no category/tags).
   // Favorites: walks you've hearted (this browser). The Favorites tab narrows the list and the map to them.
   const [listTab, setListTab] = useState("all");
   const favoriteIds = useMemo(() => new Set(profile.favorites ?? []), [profile.favorites]);
   const availableWalks = useMemo(() => {
-    const all = [...applyFilters(walks, filters), ...profile.customWalks.filter(item => matchesQuery(item, filters.query))];
+    const all = [...applyFilters(catalogWalks, filters), ...customWalks.filter(item => matchesQuery(item, filters.query))];
     return listTab === "favorites" ? all.filter(item => favoriteIds.has(item.id)) : all;
-  }, [walks, filters, profile.customWalks, listTab, favoriteIds]);
+  }, [catalogWalks, filters, customWalks, listTab, favoriteIds]);
   // category chip counts follow the tab: on Favorites they count favorites
-  const counts = useMemo(() => categoryCounts(listTab === "favorites" ? walks.filter(item => favoriteIds.has(item.id)) : walks, filters),
-    [walks, filters, listTab, favoriteIds]);
-  const popularIds = useMemo(() => popularWalkIds(walks, profile.completions), [walks, profile.completions]); // these glow on the map
+  const counts = useMemo(() => categoryCounts(listTab === "favorites" ? catalogWalks.filter(item => favoriteIds.has(item.id)) : catalogWalks, filters),
+    [catalogWalks, filters, listTab, favoriteIds]);
+  const popularIds = useMemo(() => popularWalkIds(catalogWalks, profile.completions), [catalogWalks, profile.completions]); // these glow on the map
   const baseWalk = useMemo(() => {
     const stored = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
     if (!stored || stored.category !== "Logged excursion") return stored;
@@ -422,11 +425,12 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       point: location.point,
       note: index === 0 ? "Excursion starting point." : "A stop on this excursion.",
     }));
+    const cardMeta = withExcursionCardMeta({ id: walkId, category: "Logged excursion", stops, minutes: route.minutes }, catalogWalks);
     const walk = {
       ...route,
       id: walkId,
       title: name,
-      area: "Your excursion",
+      area: cardMeta.area,
       category: "Logged excursion",
       symbol: "route",
       description: comments || "A previous excursion you logged.",
@@ -438,14 +442,18 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       activityId,
       legModes,
       stops,
+      durationMin: Math.max(1, Math.round(route.minutes)),
+      tStation: cardMeta.tStation,
+      tLines: cardMeta.tLines,
     };
     const completion = {
       id: crypto.randomUUID(),
       walkId,
       title: name,
-      area: "Your excursion",
+      area: cardMeta.area,
       category: "Logged excursion",
-      tLines: [],
+      tStation: cardMeta.tStation,
+      tLines: cardMeta.tLines,
       path: route.path,
       stops: stops.length,
       miles: Number((route.meters / 1609.344).toFixed(1)),
@@ -544,6 +552,23 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
         ? old.ranking : old.ranking.filter(id => id !== walk.id),
     });
     setSelectedCompletionId(null);
+    changeRoute(null);
+    setView("list");
+    collapseSheet();
+  }
+
+  async function deleteSelectedCustomWalk() {
+    if (!walk || !profile.customWalks.some(item => item.id === walk.id)) throw new Error("This plan could not be found.");
+    if (supabaseReady && userId) {
+      const { error } = await client.from("activities").delete().eq("name", walk.title);
+      if (error) throw error;
+    }
+    updateProfile(old => ({
+      customWalks: old.customWalks.filter(item => item.id !== walk.id),
+      completions: old.completions.filter(item => item.walkId !== walk.id),
+      ranking: old.ranking.filter(id => id !== walk.id),
+      favorites: (old.favorites ?? []).filter(id => id !== walk.id),
+    }));
     changeRoute(null);
     setView("list");
     collapseSheet();
@@ -747,8 +772,10 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
             legs={legRows} travel={travel} onLegMode={setLegMode}
             onLegSteps={index => legs[index] && ensureLeg(legs[index].from, legs[index].to, modeOf(index))}
             navHidden={navHidden && Boolean(navLeg)} onShowNav={() => { setNavHidden(false); collapseSheet(); }}
-            onDeleteActivity={selectedCompletionId ? deleteSelectedActivity : null}
-            deleteLabel={walk.category === "Logged excursion" ? "Delete excursion" : "Delete activity"}
+            onDeleteActivity={selectedCompletionId ? deleteSelectedActivity
+              : profile.customWalks.some(item => item.id === walk.id) ? deleteSelectedCustomWalk : null}
+            deleteLabel={walk.category === "Logged excursion" ? "Delete excursion"
+              : profile.customWalks.some(item => item.id === walk.id) ? "Delete plan" : "Delete activity"}
             routing={<>
                 {planNotice && <p className="plan-notice" role="status"><Icon name="check" size={16}/>{planNotice}</p>}
                 {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
@@ -791,7 +818,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
         latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
         tags: { description: place.summary ?? "" },
       })}/>}
-    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={availableWalks} onClose={closeProfile}
+    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={allWalks} onClose={closeProfile}
       avatarPath={userId ? accountAvatarPath : profile.avatarPath ?? null}
       avatarUrl={userId ? accountAvatarUrl : presetAvatarSource(profile.avatarPath)} canUploadAvatar={Boolean(userId)}
       onSaveProfile={saveProfileSettings} nameLoading={nameLoading} nameError={nameError}

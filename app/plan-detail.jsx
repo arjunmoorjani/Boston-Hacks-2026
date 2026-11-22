@@ -71,7 +71,7 @@ function DeleteActivity({ label, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
-  const subject = label === "Delete excursion" ? "excursion" : "activity";
+  const subject = label === "Delete excursion" ? "excursion" : label === "Delete plan" ? "plan" : "activity";
 
   async function remove() {
     if (deleting) return;
@@ -120,6 +120,9 @@ function ExcursionSummary({ walk, stats }) {
       <div><span>Stops</span><strong>{walk.stops.length}</strong></div>
       <div><span>Time</span><strong>{minutesLabel(stats.minutes)}</strong></div>
     </div>
+    {walk.tStation && <span className="t-chip" style={{ background: LINES.find(line => line.id === lineFamily(walk.tLines?.[0]))?.color ?? "#575b53", color: "#fff" }}>
+      <Icon name="train" size={14}/>{walk.tStation}
+    </span>}
     {(price || group) && <div className="activity-details">
       {price && <span>{price}</span>}
       {group && <span>{group}</span>}

@@ -13,6 +13,9 @@ import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { ROUTE_THEME, WALK_OPEN_STYLE } from "../lib/map-style.mjs";
 import { DEFAULT_PROFILE_AVATARS, isPresetAvatar, presetAvatarPath, validateProfileAvatar } from "../lib/profile-avatar.mjs";
 
+const T_LINE_COLORS = { Red: "#DA291C", Orange: "#ED8B00", Green: "#00843D", Blue: "#003DA5", Silver: "#7C878E" };
+const tLineColor = line => T_LINE_COLORS[line?.split("-")[0]] ?? "#575b53";
+
 // ---------- small pieces ----------
 export function Avatar({ name, size = 40, src = null, contain = false }) {
   const initials = (name || "You").trim().split(/\s+/).slice(0, 2).map(word => word[0]?.toUpperCase()).join("") || "Y";
@@ -390,7 +393,11 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
               </div>
             </div>
           : <ol className="feed-list">
-              {completions.map(c => <li key={c.id}>
+              {completions.map(c => {
+                const linkedWalk = walks.find(walk => walk.id === c.walkId);
+                const tStation = c.tStation ?? linkedWalk?.tStation;
+                const tLine = c.tLines?.[0] ?? linkedWalk?.tLines?.[0];
+                return <li key={c.id}>
                 <article className="activity activity-open" role="button" tabIndex={0} aria-label={`Open ${c.title}`}
                   onClick={() => onOpenWalk(c.walkId, c.id)}
                   onKeyDown={event => {
@@ -411,6 +418,9 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
                     <div><span>Stops</span><strong>{c.stops}</strong></div>
                     <div><span>Time</span><strong>{timeLabel(c.minutes)}</strong></div>
                   </div>
+                  {tStation && <span className="t-chip" style={{ background: tLineColor(tLine), color: "#fff" }}>
+                    <Icon name="train" size={14}/>{tStation}
+                  </span>}
                   {(c.priceCategory || Number.isFinite(c.peopleWith)) && <div className="activity-details">
                     {c.priceCategory && <span>{c.priceCategory === "FREE" ? "Free" : c.priceCategory}</span>}
                     {Number.isFinite(c.peopleWith) && <span>{c.peopleWith === 0 ? "Solo" : `With ${c.peopleWith} ${c.peopleWith === 1 ? "person" : "people"}`}</span>}
@@ -421,7 +431,7 @@ export function ProfilePage({ profile, walks, avatarPath, avatarUrl, canUploadAv
                     <RouteThumb path={c.path}/>
                   </div>
                 </article>
-              </li>)}
+              </li>})}
             </ol>}
       </section>
 
