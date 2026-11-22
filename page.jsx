@@ -260,7 +260,7 @@ export default function Home() {
     </div>
 
     <header className="topbar">
-      <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
+      <div className="brand"><span><Icon name="route" size={20}/></span>routable<span className="brand-period">.</span></div>
       <div className="topbar-right">
         <div className="city"><span/> BOSTON, MA</div>
         <button type="button" className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Your profile">

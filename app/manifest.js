@@ -2,8 +2,8 @@ export const dynamic = "force-static";
 
 export default function manifest() {
   return {
-    name: "Sidewalk Boston",
-    short_name: "Sidewalk",
+    name: "Routable Boston",
+    short_name: "Routable",
     start_url: "/",
     display: "standalone",
     background_color: "#f8f7f2",

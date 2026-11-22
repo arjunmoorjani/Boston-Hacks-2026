@@ -1,9 +1,9 @@
 import "./styles.css";
 
 export const metadata = {
-  title: "Sidewalk | Boston walks",
+  title: "Routable | Boston walks",
   description: "Explore Boston one walk at a time.",
-  appleWebApp: { capable: true, title: "Sidewalk", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Routable", statusBarStyle: "default" },
   icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
 };
 

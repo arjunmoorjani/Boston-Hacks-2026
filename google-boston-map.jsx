@@ -96,7 +96,7 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
     let poiClickListener;
     let placeRequest = 0;
     const handleAuthFailure = () => setMapError("Google Maps couldn’t authenticate. Check the key and website restrictions.");
-    window.addEventListener("sidewalk-google-auth-failure", handleAuthFailure);
+    window.addEventListener("routable-google-auth-failure", handleAuthFailure);
 
     loadGoogleMaps().then(async maps => {
       const [{ Map }, { AdvancedMarkerElement }] = await Promise.all([
@@ -157,7 +157,7 @@ export function GoogleBostonMap({ walk, selected, onSelect, location, locate, fo
       disposed = true;
       placeRequest += 1;
       poiClickListener?.remove();
-      window.removeEventListener("sidewalk-google-auth-failure", handleAuthFailure);
+      window.removeEventListener("routable-google-auth-failure", handleAuthFailure);
     };
   }, []);
 

@@ -35,7 +35,7 @@ import { withExcursionCardMeta, withNearestTStop } from "../lib/excursion-card-m
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
-const LEG_MODES_KEY = "sidewalk.legModes.v1";
+const LEG_MODES_KEY = "routable.legModes.v1";
 const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 
 const emptyWalk = { id: "no-route", title: "", area: "", category: "", description: "", stops: [], path: [] };

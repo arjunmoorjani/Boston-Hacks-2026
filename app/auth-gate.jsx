@@ -5,7 +5,7 @@ import { Icon } from "./icons";
 import { hasStoredProfile } from "../lib/profile-store.mjs";
 import { TopoArt } from "./topo-art";
 
-const guestKey = "sidewalk-guest-mode";
+const guestKey = "routable-guest-mode";
 
 function guestPreference(value) {
   try {
@@ -154,9 +154,9 @@ function Welcome({ client, startupError, onGuest }) {
   return <main className="welcome">
     <TopoArt full/>
     <section className="welcome-card" aria-labelledby="welcome-title">
-      <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
+      <div className="brand"><span><Icon name="route" size={20}/></span>routable<span className="brand-period">.</span></div>
       <h1 id="welcome-title">{enteringAsGuest ? "Continue as guest"
-        : creating ? "Create account" : mode === "signin" ? "Sign in" : "Welcome to Sidewalk"}</h1>
+        : creating ? "Create account" : mode === "signin" ? "Sign in" : "Welcome to Routable"}</h1>
       <>
         {(error || startupError) && <p className="editor-error" role="alert">{error || startupError}</p>}
         {confirmation && <p className="welcome-confirmation" role="status">{confirmation}</p>}

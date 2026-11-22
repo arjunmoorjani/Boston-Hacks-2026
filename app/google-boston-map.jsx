@@ -276,6 +276,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const stops = useRef([]);
   const browseView = useRef(null);
   const previousActiveWalk = useRef(activeWalkId);
+  const centerOnNextLocation = useRef(false);
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
   const [zoom, setZoom] = useState(14);
@@ -294,7 +295,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     let disposed = false;
     let poiClickListener, zoomListener;
     const handleAuthFailure = () => setMapError("Google Maps couldn’t authenticate. Check the key and website restrictions.");
-    window.addEventListener("sidewalk-google-auth-failure", handleAuthFailure);
+    window.addEventListener("routable-google-auth-failure", handleAuthFailure);
 
     loadGoogleMaps().then(async maps => {
       const { Map } = await maps.importLibrary("maps");
@@ -324,7 +325,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       disposed = true;
       poiClickListener?.remove();
       zoomListener?.remove();
-      window.removeEventListener("sidewalk-google-auth-failure", handleAuthFailure);
+      window.removeEventListener("routable-google-auth-failure", handleAuthFailure);
     };
   }, []);
 
@@ -808,10 +809,20 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     });
   }, [context, walk, selected, doneStops, popularIds, favoriteIds]);
 
+  // Showing the live location and moving the camera are separate. Request one
+  // recenter when location mode is enabled, then let the user pan freely while
+  // subsequent GPS updates continue moving only the blue location dot.
+  useEffect(() => {
+    centerOnNextLocation.current = following;
+  }, [following]);
+
   useEffect(() => {
     if (!context || !location) return;
     const dot = locationDot(context, location);
-    if (following) context.map.panTo(mapPoint(location));
+    if (following && centerOnNextLocation.current) {
+      context.map.panTo(mapPoint(location));
+      centerOnNextLocation.current = false;
+    }
     return () => dot.setMap(null);
   }, [context, location, following]);
 
