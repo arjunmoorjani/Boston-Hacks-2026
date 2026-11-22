@@ -2,7 +2,7 @@
 
 // Profile ("You"): cover + identity, activity feed with route thumbnails, this month's walking,
 // trophy case, your ranked list ("Which plan was better?") and your saved plans.
-// Data lives in this browser (lib/profile-store.mjs).
+// Walk activity and rankings live in this browser.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
@@ -10,6 +10,8 @@ import { LINES, lineFamily } from "./route-list";
 import { walkStats } from "./walks";
 import { sampleActivity } from "../lib/profile-store.mjs";
 import { Inserter } from "../lib/ranking.mjs";
+import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
+import { ROUTE_THEME, WALK_OPEN_STYLE } from "../lib/map-style.mjs";
 
 // ---------- small pieces ----------
 export function Avatar({ name, size = 40 }) {
@@ -17,48 +19,109 @@ export function Avatar({ name, size = 40 }) {
   return <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden="true">{initials}</span>;
 }
 
-/** Route drawn from the walk's own path: no map tiles, no API calls. */
-function RouteThumb({ path }) {
-  const W = 320, H = 170, PAD = 18;
-  if (!path?.length) return <div className="route-thumb empty"/>;
-  const k = Math.cos((path[0][0] * Math.PI) / 180); // squash longitude so shapes look right
-  const xs = path.map(([, lng]) => lng * k), ys = path.map(([lat]) => lat);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const scale = Math.min((W - PAD * 2) / Math.max(x1 - x0, 1e-6), (H - PAD * 2) / Math.max(y1 - y0, 1e-6));
-  const ox = (W - (x1 - x0) * scale) / 2, oy = (H - (y1 - y0) * scale) / 2;
-  const pts = path.map(([lat, lng]) => [ox + (lng * k - x0) * scale, oy + (y1 - lat) * scale]);
-  const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("");
-  return <svg className="route-thumb" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-    <defs><pattern id="streets" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(18)">
-      <path d="M0 13h26M13 0v26" stroke="#e4e1d6" strokeWidth="5"/>
-    </pattern></defs>
-    <rect width={W} height={H} fill="#f2f0eb"/>
-    <rect width={W} height={H} fill="url(#streets)"/>
-    <path d={d} fill="none" style={{ stroke: "var(--route-casing)" }} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d={d} fill="none" style={{ stroke: "var(--route)" }} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-    <circle cx={pts[0][0]} cy={pts[0][1]} r="6" style={{ fill: "var(--stop)", stroke: "var(--stop-ring)" }} strokeWidth="2.5"/>
-    <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="6" style={{ fill: "var(--stop)", stroke: "var(--stop-ring)" }} strokeWidth="2.5"/>
-  </svg>;
-}
-
-function ActivityPhotos({ paths, title }) {
-  const [state, setState] = useState({ loading: Boolean(paths?.length), urls: [], error: "" });
+/** A non-interactive mini Google map showing the route in its real Boston context. */
+export function RouteThumb({ path }) {
+  const mapElement = useRef(null);
 
   useEffect(() => {
-    if (!paths?.length) return;
+    if (!mapElement.current || !path?.length) return;
+    let disposed = false;
+    let overlays = [];
+    let map;
+
+    const draw = async () => {
+      try {
+        const maps = await loadGoogleMaps();
+        await maps.importLibrary("maps");
+        if (disposed || !mapElement.current) return;
+
+        map = new maps.Map(mapElement.current, {
+          center: mapPoint(path[0]),
+          zoom: 14,
+          styles: WALK_OPEN_STYLE,
+          disableDefaultUI: true,
+          clickableIcons: false,
+          gestureHandling: "none",
+          keyboardShortcuts: false,
+          backgroundColor: "#F4F4F2",
+        });
+        const bounds = new maps.LatLngBounds();
+        const mapPath = path.map(point => {
+          const position = mapPoint(point);
+          bounds.extend(position);
+          return position;
+        });
+        overlays = [
+          new maps.Polyline({ map, path: mapPath, strokeColor: ROUTE_THEME.casing, strokeWeight: 7, strokeOpacity: 1 }),
+          new maps.Polyline({ map, path: mapPath, strokeColor: ROUTE_THEME.line, strokeWeight: 4, strokeOpacity: 1 }),
+          ...[mapPath[0], mapPath.at(-1)].map(center => new maps.Circle({
+            map, center, radius: 18, fillColor: ROUTE_THEME.stop, fillOpacity: 1,
+            strokeColor: ROUTE_THEME.stopRing, strokeOpacity: 1, strokeWeight: 3,
+          })),
+        ];
+        if (path.length === 1) map.setZoom(15);
+        else map.fitBounds(bounds, 24);
+        mapElement.current.dataset.loaded = "true";
+      } catch {
+        if (!disposed && mapElement.current) mapElement.current.dataset.error = "true";
+      }
+    };
+
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      draw();
+    }, { rootMargin: "240px" });
+    observer.observe(mapElement.current);
+
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      overlays.forEach(overlay => overlay.setMap(null));
+      mapsCleanup(map);
+    };
+  }, [path]);
+
+  if (!path?.length) return <div className="route-thumb empty"/>;
+  return <div ref={mapElement} className="route-thumb" aria-hidden="true"/>;
+}
+
+function mapsCleanup(map) {
+  if (map && window.google?.maps?.event) window.google.maps.event.clearInstanceListeners(map);
+}
+
+export function ActivityPhotos({ paths, activityId, title }) {
+  const [state, setState] = useState({ loading: Boolean(paths?.length || activityId), urls: [], error: "" });
+
+  useEffect(() => {
+    if (!paths?.length && !activityId) {
+      setState({ loading: false, urls: [], error: "" });
+      return;
+    }
     let stale = false;
     import("../lib/supabase.mjs").then(async ({ supabase }) => {
-      const { data, error } = await supabase.storage.from("activity-photos").createSignedUrls(paths, 60 * 60);
+      let photoPaths = paths ?? [];
+      if (!photoPaths.length && activityId) {
+        const { data: photos, error: lookupError } = await supabase.from("activity_photos")
+          .select("storage_path").eq("activity_id", activityId);
+        if (lookupError) throw lookupError;
+        photoPaths = (photos ?? []).map(photo => photo.storage_path).filter(Boolean);
+      }
+      if (!photoPaths.length) {
+        if (!stale) setState({ loading: false, urls: [], error: "" });
+        return;
+      }
+      const { data, error } = await supabase.storage.from("activity-photos").createSignedUrls(photoPaths, 60 * 60);
       if (stale) return;
       if (error) setState({ loading: false, urls: [], error: "Photos couldn’t be loaded." });
       else setState({ loading: false, urls: (data ?? []).map(item => item.signedUrl).filter(Boolean), error: "" });
     }).catch(() => { if (!stale) setState({ loading: false, urls: [], error: "Photos couldn’t be loaded." }); });
     return () => { stale = true; };
-  }, [paths]);
+  }, [paths, activityId]);
 
-  if (!paths?.length) return null;
-  if (state.loading) return <p className="activity-photo-status" role="status">Loading {paths.length} {paths.length === 1 ? "photo" : "photos"}…</p>;
+  if (state.loading) return <p className="activity-photo-status" role="status">Loading photos…</p>;
   if (state.error) return <p className="activity-photo-status error">{state.error}</p>;
+  if (!state.urls.length) return null;
   return <div className={`activity-photos count-${Math.min(state.urls.length, 3)}`}>
     {state.urls.map((url, index) => <img key={url} src={url} alt={`${title} photo ${index + 1}`}/>)}
   </div>;
@@ -148,9 +211,13 @@ export function RankPrompt({ newId, ranking, titleOf, onDone }) {
 }
 
 // ---------- page ----------
-export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenWalk, onDeleteWalk, onSample, onReset }) {
+export function ProfilePage({ profile, walks, onClose, onRename, nameLoading, nameError, onSignOut, onExitGuest,
+  savingOuting, onRank, onOpenWalk, onDeleteWalk, onSample, onReset }) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
+  const [savingName, setSavingName] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [accountError, setAccountError] = useState("");
   const close = useRef(null);
   const { completions, ranking, customWalks } = profile;
 
@@ -190,11 +257,32 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
   const unranked = [...new Set(completions.map(c => c.walkId))].filter(id => !ranking.includes(id));
   const lineChips = LINES.filter(line => stats.lines.has(line.id));
 
-  function saveName() {
-    const name = draftName.trim().slice(0, 30) || "You";
-    onRename(name);
-    setDraftName(name);
-    setEditing(false);
+  async function saveName(event) {
+    event.preventDefault();
+    const name = draftName.trim();
+    if (savingName || (onSignOut && !name)) return;
+    setSavingName(true);
+    setAccountError("");
+    try {
+      await onRename(name);
+      setEditing(false);
+    } catch (error) {
+      setAccountError(error?.message || "Couldn’t save your display name.");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function signOut() {
+    setSigningOut(true);
+    setAccountError("");
+    try {
+      await onSignOut();
+    } catch (error) {
+      setAccountError(error?.message || "Couldn’t sign out. Try again.");
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return <div className="profile-page" role="dialog" aria-modal="true" aria-labelledby="profile-name">
@@ -206,14 +294,30 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
     <div className="profile-grid">
       <section className="profile-id">
         <div className="profile-avatar"><Avatar name={profile.name} size={104}/></div>
-        {editing
-          ? <form className="name-form" onSubmit={event => { event.preventDefault(); saveName(); }}>
-              <input autoFocus value={draftName} onChange={event => setDraftName(event.target.value)} onBlur={saveName} maxLength={30} aria-label="Your name"/>
-            </form>
-          : <h1 id="profile-name">{profile.name}
-              <button type="button" className="name-edit" onClick={() => { setDraftName(profile.name); setEditing(true); }} aria-label="Edit your name"><Icon name="pencil" size={15}/></button>
-            </h1>}
+        <div className="profile-name-heading">
+          <h1 id="profile-name">{profile.name}</h1>
+          {!editing && <button type="button" className="name-edit" disabled={nameLoading || signingOut}
+            onClick={() => { setDraftName(profile.name); setAccountError(""); setEditing(true); }} aria-label="Edit your name"><Icon name="pencil" size={15}/></button>}
+        </div>
+        {editing && <form className="name-form" onSubmit={saveName}>
+          <input autoFocus required={Boolean(onSignOut)} disabled={savingName || signingOut} value={draftName} onChange={event => setDraftName(event.target.value)}
+            maxLength={30} aria-label="Your name"/>
+          <div className="profile-account-actions">
+            <button type="submit" className="plan-primary" disabled={savingName || signingOut || (onSignOut && !draftName.trim())}>{savingName ? "Saving…" : "Save name"}</button>
+            <button type="button" className="plan-secondary" disabled={savingName}
+              onClick={() => { setAccountError(""); setEditing(false); }}>Cancel</button>
+          </div>
+        </form>}
+        {nameLoading && <p role="status">Loading your display name…</p>}
+        {(accountError || nameError) && <p className="editor-error" role="alert">{accountError || nameError}</p>}
         <p className="profile-where">Boston, MA</p>
+        <div className="profile-account-actions">
+          {onSignOut
+            ? <button type="button" className="plan-secondary" disabled={signingOut || savingName || savingOuting} onClick={signOut}>
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            : onExitGuest && <button type="button" className="plan-secondary" disabled={savingOuting} onClick={onExitGuest}>Exit guest mode</button>}
+        </div>
         <div className="profile-counts">
           <div><span>Plans done</span><strong>{stats.done}</strong></div>
           <div><span>Miles walked</span><strong>{stats.miles}</strong></div>
@@ -254,12 +358,18 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
             </div>
           : <ol className="feed-list">
               {completions.map(c => <li key={c.id}>
-                <article className="activity">
+                <article className="activity activity-open" role="button" tabIndex={0} aria-label={`Open ${c.title}`}
+                  onClick={() => onOpenWalk(c.walkId, c.id)}
+                  onKeyDown={event => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    onOpenWalk(c.walkId, c.id);
+                  }}>
                   <header>
                     <Avatar name={profile.name} size={38}/>
                     <div>
                       <small>{dayLabel(c.completedAt)} · {c.area}</small>
-                      <h3><button type="button" onClick={() => onOpenWalk(c.walkId)}>{c.title}</button></h3>
+                      <h3>{c.title}</h3>
                     </div>
                     {ranking.includes(c.walkId) && <span className="rank-badge">#{ranking.indexOf(c.walkId) + 1}</span>}
                   </header>
@@ -273,10 +383,10 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
                     {Number.isFinite(c.peopleWith) && <span>{c.peopleWith === 0 ? "Solo" : `With ${c.peopleWith} ${c.peopleWith === 1 ? "person" : "people"}`}</span>}
                   </div>}
                   {c.comments && <p className="activity-comments">{c.comments}</p>}
-                  <ActivityPhotos paths={c.photoPaths} title={c.title}/>
-                  <button type="button" className="activity-map" onClick={() => onOpenWalk(c.walkId)} aria-label={`Open ${c.title} on the map`}>
+                  <ActivityPhotos paths={c.photoPaths} activityId={c.activityId} title={c.title}/>
+                  <div className="activity-map">
                     <RouteThumb path={c.path}/>
-                  </button>
+                  </div>
                 </article>
               </li>)}
             </ol>}

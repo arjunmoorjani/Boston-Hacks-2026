@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadGoogleMaps } from "../lib/google-maps.mjs";
-import { fetchDirections } from "../lib/directions.mjs";
+import { fetchDirections, minutesLabel } from "../lib/directions.mjs";
+import { getLocationOnce, watchUserLocation } from "../lib/location.mjs";
 import { endPlaceSearchSession, googlePlaceSuggestions, MIN_GOOGLE_CHARS } from "../lib/place-search.mjs";
 import { fetchPlaceProfile } from "../lib/place-profile.mjs";
 import { GoogleBostonMap } from "./google-boston-map";
 import { TRAVEL_MODES } from "./directions-panel";
 import { Icon } from "./icons";
-import { loggedExcursionDatabaseReady, saveLoggedExcursion } from "../lib/log-excursion.mjs";
+import { addActiveExcursionStop, loadActiveExcursionStopIds, loggedExcursionDatabaseReady, saveLoggedExcursion, startActiveExcursion, updateActiveExcursion } from "../lib/log-excursion.mjs";
 
 const BUILDER_ROUTE_IDS = new Set(["log-builder"]);
+const EMPTY_ROUTE = { status: "idle", path: [] };
+const EMPTY_WALK = { id: "active-excursion", stops: [], path: [] };
+const NO_WALKS = [];
 const noop = () => {};
 const todayValue = () => {
   const date = new Date();
@@ -122,6 +126,344 @@ function RouteBuilderMap({ locationNumber, locations, route, onPick }) {
     </div>
     <p className={`log-map-status${route.status === "error" ? " error" : ""}`} role="status">{status}</p>
   </>;
+}
+
+function ExcursionStopPicker({ fieldId, label, stop, number, onChange }) {
+  return <>
+    <label htmlFor={fieldId}>{label}</label>
+    <PlaceField fieldId={fieldId} location={stop} number={number} onChange={onChange}/>
+    <p className="log-map-prompt">Or pick location {number} on the map</p>
+    {stop.point && !stop.placeId &&
+      <p className="log-map-status">Choose a searchable place or address to save this stop.</p>}
+    <RouteBuilderMap locationNumber={number} locations={[stop]} route={EMPTY_ROUTE} onPick={onChange}/>
+  </>;
+}
+
+function travelPrice(mode, fare) {
+  if (mode === "WALKING" || mode === "BICYCLING") return 0;
+  const dollars = /^(?:US)?\$\s*(\d+(?:\.\d{1,2})?)$/i.exec(fare?.trim() ?? "");
+  return dollars ? Number(dollars[1]) : null;
+}
+
+function suggestedMode(quotes) {
+  const knownPrices = quotes.filter(quote => quote.price !== null);
+  const ranked = knownPrices.length ? knownPrices : quotes;
+  // Trade up to five extra minutes for each dollar saved.
+  return [...ranked].sort((a, b) =>
+    (a.minutes + (a.price ?? 0) * 5) - (b.minutes + (b.price ?? 0) * 5))[0]?.mode;
+}
+
+function NewExcursionForm({ onBack, onBegin, initialDraft }) {
+  const [name, setName] = useState(initialDraft?.name ?? "");
+  const [firstStop, setFirstStop] = useState(initialDraft?.firstStop ?? { label: "", address: "", point: null, placeId: null });
+  const [mode, setMode] = useState(initialDraft?.mode ?? "WALKING");
+  const [comparison, setComparison] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
+  const startId = useRef(null);
+  const destination = firstStop.point;
+  const current = comparison?.destination === destination ? comparison : null;
+
+  useEffect(() => {
+    if (!destination) return;
+    let active = true;
+    async function compareModes() {
+      try {
+        const origin = await getLocationOnce();
+        if (!active) return;
+        const results = await Promise.allSettled(TRAVEL_MODES.map(async ([mode]) => {
+          const route = await fetchDirections(origin, destination, mode);
+          return { ...route, mode, price: travelPrice(mode, route.fare) };
+        }));
+        if (!active) return;
+        const quotes = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+        setComparison({ destination, origin, quotes, error: quotes.length ? "" : "Travel estimates are unavailable." });
+      } catch (error) {
+        if (active) setComparison({ destination, quotes: [], error: error.message });
+      }
+    }
+    compareModes();
+    return () => { active = false; };
+  }, [destination]);
+
+  const recommended = suggestedMode(current?.quotes ?? []);
+
+  async function begin() {
+    if (starting || !name.trim() || !firstStop.point) return;
+    setStarting(true);
+    setStartError("");
+    const activityId = startId.current ??= crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+    const origin = current?.origin;
+    const trip = current?.quotes.find(quote => quote.mode === mode);
+    const excursion = { activityId, startedAt, name: name.trim(), firstStop, mode, origin, trip };
+    try {
+      await startActiveExcursion(excursion);
+      onBegin(excursion);
+    } catch (error) {
+      setStartError(error.message || "Couldn’t start the excursion.");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  return <section className="log-form-page" aria-labelledby="new-excursion-title">
+    <button type="button" className="log-form-back" disabled={starting} onClick={onBack} aria-label="Back to excursion options">← Back</button>
+    <div className="log-form-content">
+      <div className="log-form-section">
+        <label id="new-excursion-title" htmlFor="new-excursion-name">Name your excursion</label>
+        <input id="new-excursion-name" type="text" value={name} onChange={event => setName(event.target.value)}
+          placeholder="Example: Saturday in the North End" autoComplete="off"/>
+      </div>
+      <div className="log-form-section log-location-section">
+        <ExcursionStopPicker fieldId="new-excursion-first-stop" label="Where to first?"
+          stop={firstStop} number={1} onChange={setFirstStop}/>
+      </div>
+      <div className="log-transport-choice">
+        <span>How do you intend to get there?</span>
+        <div className="travel-modes" role="group" aria-label="How do you intend to get there?">
+          {TRAVEL_MODES.map(([value, label, icon]) => {
+            const quote = current?.quotes.find(item => item.mode === value);
+            return <button key={value} type="button" aria-pressed={mode === value}
+              onClick={() => setMode(value)}>
+              <Icon name={icon} size={15}/>{label}
+              {value === recommended && <span className="excursion-recommended" aria-label="Recommended" title="Recommended"/>}
+              {quote && <small>{minutesLabel(quote.minutes)} · {quote.price === 0 ? "Free" : quote.fare || "Price unknown"}</small>}
+            </button>;
+          })}
+        </div>
+        {destination && !current && <p className="log-map-status" role="status">Comparing travel times and prices…</p>}
+        {current?.error && <p className="log-map-status error" role="status">{current.error}</p>}
+      </div>
+      {startError && <p className="log-save-error" role="alert">{startError}</p>}
+      <button type="button" className="log-finish" disabled={starting || !name.trim() || !firstStop.point || !firstStop.placeId}
+        onClick={begin}>{starting ? "Starting excursion…" : "Begin"}</button>
+    </div>
+  </section>;
+}
+
+const emptyStop = { label: "", address: "", point: null, placeId: null };
+const stopArrivalRadius = 50;
+
+function metersBetween([lat, lng], [otherLat, otherLng]) {
+  const longitudeScale = Math.cos((lat + otherLat) * Math.PI / 360);
+  return 111_195 * Math.hypot(lat - otherLat, (lng - otherLng) * longitudeScale);
+}
+
+function excursionLeg(trip, origin, destination) {
+  return {
+    path: trip?.path?.length > 1 ? trip.path : origin ? [origin, destination] : [],
+    meters: trip?.meters ?? 0,
+    minutes: trip?.minutes ?? 0,
+  };
+}
+
+function ActiveExcursion({ excursion, visible, onEnd }) {
+  const { activityId, firstStop, mode } = excursion;
+  const [stops, setStops] = useState([firstStop]);
+  const [nextStop, setNextStop] = useState(emptyStop);
+  const [addingStop, setAddingStop] = useState(false);
+  const [name, setName] = useState(excursion.name);
+  const [savedName, setSavedName] = useState(excursion.name);
+  const [failedName, setFailedName] = useState(null);
+  const [arrivedCount, setArrivedCount] = useState(0);
+  const [plannedTrips, setPlannedTrips] = useState([excursion.trip ?? null]);
+  const [saving, setSaving] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [location, setLocation] = useState(excursion.origin ?? null);
+  const [locationStatus, setLocationStatus] = useState("");
+  const [liveTrip, setLiveTrip] = useState(null);
+  const [tripStatus, setTripStatus] = useState("");
+  const [routeStart, setRouteStart] = useState(excursion.trip ? null : excursion.origin ?? null);
+  const lastOrigin = useRef(excursion.origin ?? null);
+  const initialOrigin = useRef(excursion.origin ?? null);
+  const busy = useRef(false);
+  const routeMap = useRef(null);
+  const destination = stops[arrivedCount];
+  const trip = liveTrip?.destination === destination ? liveTrip?.route : plannedTrips[arrivedCount];
+
+  useEffect(() => {
+    if (!visible) return;
+    if (!navigator.geolocation) {
+      setLocationStatus("Your location is unavailable in this browser.");
+      return;
+    }
+    return watchUserLocation(navigator.geolocation, {
+      onLocation: point => {
+        setLocation(point);
+        setLocationStatus("");
+        initialOrigin.current ??= point;
+        const last = lastOrigin.current;
+        if (!last || Math.hypot(point[0] - last[0], (point[1] - last[1]) * 0.74) >= 0.001) {
+          lastOrigin.current = point;
+          setRouteStart(point);
+        }
+      },
+      onError: setLocationStatus,
+    });
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !location || !destination || metersBetween(location, destination.point) > stopArrivalRadius) return;
+    lastOrigin.current = location;
+    setRouteStart(location);
+    setTripStatus("");
+    setArrivedCount(arrivedCount + 1);
+  }, [arrivedCount, destination, location, visible]);
+
+  useEffect(() => {
+    if (!routeStart || !destination || !visible) return;
+    let active = true;
+    setTripStatus("Finding your route…");
+    fetchDirections(routeStart, destination.point, mode).then(route => {
+      if (active) {
+        setLiveTrip({ destination, route });
+        setPlannedTrips(current => current[arrivedCount] ? current :
+          current.map((planned, index) => index === arrivedCount ? route : planned));
+        setTripStatus("");
+      }
+    }).catch(() => {
+      if (active) {
+        setLiveTrip({ destination, route: null });
+        setTripStatus("Directions are unavailable. The dotted line points toward the stop.");
+      }
+    });
+    return () => { active = false; };
+  }, [arrivedCount, routeStart, destination, mode, visible]);
+
+  const directions = useMemo(() => ({
+    excursionLegs: stops.map((stop, index) => {
+      const current = index === arrivedCount;
+      const legTrip = current ? trip : plannedTrips[index];
+      const origin = (current && routeStart) || stops[index - 1]?.point || initialOrigin.current;
+      return {
+        destination: stop.point,
+        destinationName: stop.label,
+        path: excursionLeg(legTrip, origin, stop.point).path,
+        completed: index < arrivedCount,
+        duration: legTrip ? minutesLabel(legTrip.minutes) : null,
+      };
+    }),
+  }), [arrivedCount, plannedTrips, routeStart, stops, trip]);
+
+  const save = useCallback(async (label, action) => {
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(label);
+    setSaveError("");
+    try {
+      await action();
+    } catch (error) {
+      setSaveError(error.message || "Couldn’t update the excursion.");
+    } finally {
+      busy.current = false;
+      setSaving("");
+    }
+  }, []);
+
+  const trimmedName = name.trim();
+  useEffect(() => {
+    if (saving || !trimmedName || trimmedName === savedName || trimmedName === failedName) return;
+    const timer = setTimeout(() => {
+      save("Saving name…", async () => {
+        try {
+          await updateActiveExcursion(activityId, { name: trimmedName });
+          setSavedName(trimmedName);
+        } catch (error) {
+          setFailedName(trimmedName);
+          throw new Error(error.message || "Couldn’t save the excursion name. Edit it to try again.");
+        }
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [activityId, failedName, save, savedName, saving, trimmedName]);
+
+  function addStop(event) {
+    event.preventDefault();
+    if (!nextStop.point) return;
+    save("Adding stop…", async () => {
+      if (!nextStop.placeId) throw new Error("Choose a searchable place or address to save this stop.");
+      if (stops.some(stop => stop.placeId === nextStop.placeId)) {
+        throw new Error("This place is already a stop on the excursion.");
+      }
+      const previousStop = stops.at(-1);
+      const nextTrip = await fetchDirections(previousStop.point, nextStop.point, mode).catch(() => null);
+      await addActiveExcursionStop(activityId, stops.length + 1, nextStop.placeId);
+      setPlannedTrips(current => [...current, nextTrip]);
+      setStops(current => [...current, nextStop]);
+      setNextStop(emptyStop);
+      setAddingStop(false);
+      routeMap.current?.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function endExcursion() {
+    if (!name.trim()) return;
+    save("Ending excursion…", async () => {
+      const legs = stops.map((stop, index) => excursionLeg(
+        plannedTrips[index], stops[index - 1]?.point ?? initialOrigin.current, stop.point,
+      ));
+      const savedIds = await loadActiveExcursionStopIds(activityId);
+      const locationsById = new Map(stops.map(stop => [stop.placeId, stop]));
+      const locations = savedIds.map(id => locationsById.get(id));
+      if (locations.length !== stops.length || locations.some(stop => !stop)) {
+        throw new Error("The saved stops could not be matched to this excursion.");
+      }
+      await updateActiveExcursion(activityId, { name: name.trim(), status: "completed" });
+      const path = [];
+      for (const leg of legs) {
+        for (const point of leg.path) {
+          if (path.at(-1)?.[0] !== point[0] || path.at(-1)?.[1] !== point[1]) path.push(point);
+        }
+      }
+      onEnd({
+        activityId, name: name.trim(), date: todayValue(), comments: "",
+        locations,
+        legModes: locations.slice(1).map(() => mode),
+        route: {
+          path: path.length ? path : locations.map(stop => stop.point),
+          meters: legs.reduce((sum, leg) => sum + leg.meters, 0),
+          minutes: legs.reduce((sum, leg) => sum + leg.minutes, 0),
+        },
+      });
+    });
+  }
+
+  return <section className="log-form-page" aria-label="Active excursion">
+    <div className="log-form-content">
+      <div className="log-form-section">
+        <input className="active-excursion-name" type="text" aria-label="Excursion name" value={name}
+          readOnly={saving === "Ending excursion…"}
+          onChange={event => {
+            setFailedName(null);
+            setName(event.target.value);
+          }} required/>
+        <p>{destination ? `On the way to Stop ${arrivedCount + 1} · ${destination.label}` : "All stops reached"}</p>
+        {destination && <p>{TRAVEL_MODES.find(([value]) => value === mode)?.[1]}{trip && ` · ${minutesLabel(trip.minutes)} expected`}</p>}
+        <div className="log-start-map" ref={routeMap}>
+          {visible && <GoogleBostonMap walk={EMPTY_WALK} walks={NO_WALKS} selected={null} onSelect={noop}
+            directions={directions} location={location} userLocationIcon showTransitToggle={false}/>}
+        </div>
+        {(locationStatus || tripStatus) && <p className="log-map-status" role="status">{locationStatus || tripStatus}</p>}
+      </div>
+
+      <div className="log-form-section">
+        <button type="button" className="log-form-back" aria-expanded={addingStop} aria-controls="active-stop-form"
+          onClick={() => setAddingStop(current => !current)}> {addingStop ? "Hide new stop" : "+ Add a stop"}</button>
+        <form id="active-stop-form" onSubmit={addStop} hidden={!addingStop}>
+          {addingStop && <ExcursionStopPicker fieldId="active-next-stop" label={`Stop ${stops.length + 1}`}
+            stop={nextStop} number={stops.length + 1} onChange={setNextStop}/>}
+          <button type="submit" className="log-form-back"
+            disabled={!nextStop.point || !nextStop.placeId || Boolean(saving)}>Add stop</button>
+        </form>
+      </div>
+
+      {saveError && <p className="log-save-error" role="alert">{saveError}</p>}
+      {saving && <p className="log-map-status" role="status">{saving}</p>}
+      <button type="button" className="log-save-excursion" disabled={!name.trim() || Boolean(saving)}
+        onClick={endExcursion}>End excursion</button>
+    </div>
+  </section>;
 }
 
 function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
@@ -341,13 +683,21 @@ function ExcursionDetails({ excursion, onBack, onSaved }) {
   </section>;
 }
 
-export function LogPage({ onLog }) {
+export function LogPage({ onLog, visible }) {
   const [page, setPage] = useState("menu");
   const [draft, setDraft] = useState(null);
+  const [activeExcursion, setActiveExcursion] = useState(null);
   useEffect(() => {
+    if (!visible) return;
     document.documentElement.classList.add("log-open");
     return () => document.documentElement.classList.remove("log-open");
-  }, []);
+  }, [visible]);
+
+  if (page === "new") return <NewExcursionForm initialDraft={activeExcursion} onBack={() => setPage("menu")}
+    onBegin={excursion => { setActiveExcursion(excursion); setPage("active"); }}/>;
+
+  if (page === "active") return <ActiveExcursion excursion={activeExcursion} visible={visible}
+    onEnd={excursion => { onLog?.(excursion); setActiveExcursion(null); setPage("saved"); }}/>;
 
   if (page === "previous") return <PreviousExcursionForm initialDraft={draft} onBack={() => setPage("menu")}
     onFinish={excursion => { setDraft(excursion); setPage("details"); }}/>;
@@ -368,7 +718,7 @@ export function LogPage({ onLog }) {
       <h1 id="log-page-title">Log an excursion</h1>
       <div className="log-page-actions">
         <button type="button" className="log-page-action" onClick={() => setPage("previous")}>Log a previous excursion</button>
-        <button type="button" className="log-page-action log-page-action-primary">Start a new excursion</button>
+        <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("new")}>Start a new excursion</button>
       </div>
     </div>
   </section>;
