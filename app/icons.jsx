@@ -20,6 +20,13 @@ const paths = {
   chevronDown: <path d="m6 9 6 6 6-6"/>,
   chevronUp: <path d="m6 15 6-6 6 6"/>,
   bike: <><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9l3 7.5 3-7.5M8 6h3m4 0h2l-2 3"/></>,
+  straight: <path d="M12 20V5M6 11l6-6 6 6"/>,
+  turnLeft: <path d="M16 20v-7a4 4 0 0 0-4-4H5M9 5 5 9l4 4"/>,
+  turnRight: <path d="M8 20v-7a4 4 0 0 1 4-4h7M15 5l4 4-4 4"/>,
+  slightLeft: <path d="M14 20v-6L7 7M7 13V7h6"/>,
+  slightRight: <path d="M10 20v-6l7-7M17 13V7h-6"/>,
+  uturn: <path d="M8 20V10a4 4 0 0 1 8 0v4m-4-3 4 4 4-4"/>,
+  arrive: <><path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z"/><circle cx="12" cy="11" r="2"/></>,
   car: <><path d="M5 16V11l2-5h10l2 5v5M3 11h18v5H3z"/><circle cx="7" cy="18.5" r="1.5"/><circle cx="17" cy="18.5" r="1.5"/></>,
   train: <><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 11h12M9 21l1.5-4M15 21l-1.5-4"/><circle cx="9.5" cy="14" r=".6"/><circle cx="14.5" cy="14" r=".6"/></>,
 };

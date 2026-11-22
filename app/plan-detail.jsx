@@ -1,10 +1,12 @@
 "use client";
 
 // Plan detail inside the bottom sheet: header, getting there by T, the stops, "Keep going"
-// suggestions from the last stop, and a sticky Fork / Do this plan bar.
+// suggestions from the last stop, and a sticky Modify / Do this plan bar.
 
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Icon } from "./icons";
+import { distanceLabel, minutesLabel } from "../lib/directions.mjs";
+import { LEG_MODES, LONG_WALK_M, navSteps } from "../lib/legs.mjs";
 import { LINES, lineFamily, duration, costLabel } from "./route-list";
 import { suggestRoutes } from "../lib/suggest.mjs";
 
@@ -20,10 +22,48 @@ function reasonFor(route) {
     ?? reasons.find(reason => !reason.endsWith("min walk")) ?? "Nearby";
 }
 
+const MODE = { WALKING: ["Walk", "walk"], BICYCLING: ["Bike", "bike"], TRANSIT: ["T", "train"] };
+
+// Between two stops: how long it takes, how you're going (walk, bike or T), and its steps on request.
+function LegRow({ leg, current, onMode, onSteps }) {
+  const [open, setOpen] = useState(false);
+  const { mode, entry, minutes } = leg;
+  const result = entry?.status === "ready" ? entry.result : null;
+  const ride = result?.segments.find(segment => segment.kind === "transit");
+  const long = mode === "WALKING" && leg.straightMeters > LONG_WALK_M;
+  const summary = entry?.status === "loading" ? "Getting route…"
+    : entry?.status === "error" ? entry.error
+    : [minutes != null ? minutesLabel(minutes) : null, result ? distanceLabel(result.meters) : null].filter(Boolean).join(" · ");
+  return <li className={`plan-leg ${current ? "current" : ""}`}>
+    <span className="plan-leg-rail" aria-hidden="true"><Icon name={MODE[mode][1]} size={14}/></span>
+    <div className="plan-leg-body">
+      <div className="plan-leg-head">
+        <span className="plan-leg-time">
+          {ride && <span className="dir-line-chip" style={{ background: ride.line.color, color: ride.line.textColor }}>{ride.line.short ?? ride.line.name}</span>}
+          {summary}
+        </span>
+        <button type="button" className="dir-steps-toggle" aria-expanded={open} onClick={() => { if (!open) onSteps(); setOpen(value => !value); }}>
+          {open ? "Hide" : "Steps"}<Icon name={open ? "chevronUp" : "chevronDown"} size={14}/>
+        </button>
+        <span className="leg-modes" role="group" aria-label={`Getting from ${leg.from.name} to ${leg.to.name}`}>
+          {LEG_MODES.map(value => <button key={value} type="button" aria-pressed={mode === value} title={MODE[value][0]}
+            aria-label={MODE[value][0]} onClick={() => onMode(value)}><Icon name={MODE[value][1]} size={15}/></button>)}
+        </span>
+      </div>
+      {long && <p className="plan-leg-hint">Long walk. The T or a bike may be quicker.</p>}
+      {mode === "TRANSIT" && result && !ride && <p className="plan-leg-hint">No T ride helps here, so this is walking the whole way.</p>}
+      {open && result && <ol className="dir-steps">{navSteps(result, leg.to.name).slice(0, -1).map((step, i) => <li key={i}>
+        <span>{step.instruction}{step.note && <small>{step.note}</small>}</span>
+        {step.meters > 0 && <em>{distanceLabel(step.meters)}</em>}
+      </li>)}</ol>}
+    </div>
+  </li>;
+}
+
 const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
 
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, onDirections,
-  onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing }) {
+  onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing, legs = [], travel, onLegMode, onLegSteps, navHidden, onShowNav }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
   const label = [theme, walk.area].filter(Boolean).join(" · ");
@@ -51,7 +91,9 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
     {walking && <div className="walk-progress" role="status">
       <span>Stop {step + 1} of {walk.stops.length}</span>
       <strong>{walk.stops[step].name}</strong>
-      <button type="button" className="inline-link" onClick={() => onDirections(stopTarget(walk.stops[step]))}><Icon name="walk" size={14}/>Directions</button>
+      {step === 0
+        ? <button type="button" className="inline-link" onClick={() => onDirections(stopTarget(walk.stops[step]))}><Icon name="walk" size={14}/>Directions from where you are</button>
+        : navHidden && <button type="button" className="inline-link" onClick={onShowNav}><Icon name="straight" size={14}/>Show turn-by-turn</button>}
     </div>}
     {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
     {rankSlot}
@@ -66,10 +108,17 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
       <button type="button" className="t-card-link inline-link" onClick={() => onDirections(stopTarget(walk.stops[0]), "TRANSIT")}><Icon name="train" size={14}/>Directions by T to the start</button>
     </section>}
 
+    {legs.length > 0 && travel && <p className="plan-travel">
+      <Icon name="route" size={15}/>{travel.known ? `About ${minutesLabel(travel.minutes)} getting between stops` : "Working out travel time…"}
+      <span>Pick walk, bike or T for each leg.</span>
+    </p>}
     <ol className="plan-stops">
       {walk.stops.map((stop, index) => {
         const price = PRICE[stop.priceLevel];
-        return <li key={stop.id ?? stop.name}>
+        const leg = index > 0 ? legs[index - 1] : null;
+        return <Fragment key={stop.id ?? stop.name}>
+        {leg && <LegRow leg={leg} current={walking && step === index} onMode={mode => onLegMode(leg.index, mode)} onSteps={() => onLegSteps(leg.index)}/>}
+        <li className="plan-stop">
           <button type="button" onClick={() => onSelectStop(index)} aria-pressed={selected === index}>
             <span className={`stop-badge ${walking && index < step ? "done" : ""}`}>{walking && index < step ? <Icon name="check" size={14}/> : index + 1}</span>
             <span>
@@ -77,7 +126,8 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
               <small>{[stop.note, price].filter(Boolean).join(" · ")}</small>
             </span>
           </button>
-        </li>;
+        </li>
+        </Fragment>;
       })}
     </ol>
 
@@ -99,7 +149,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
     <div className="plan-bar">
       {walking
         ? <button type="button" className="plan-secondary" onClick={onEndWalk}>End</button>
-        : <button type="button" className="plan-secondary" onClick={() => onFork([])}>Fork</button>}
+        : <button type="button" className="plan-secondary" onClick={() => onFork([])}>Modify</button>}
       <button type="button" className="plan-primary" onClick={onAdvance}>
         {!walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
       </button>

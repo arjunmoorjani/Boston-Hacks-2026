@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ROUTE_THEME } from "../lib/map-style.mjs";
 import { clamp, fitRoute, MAX_ZOOM, MIN_ZOOM, project, tileLayout, unproject } from "./map-math";
 
 const baseURL = "https://basemaps.cartocdn.com/rastertiles/voyager";
 const osmURL = "https://tile.openstreetmap.org";
 const cartoKey = process.env.NEXT_PUBLIC_CARTO_BASEMAP_KEY?.trim();
 const bostonCenter = [42.355, -71.07];
-const routePurple = "#5839b5";
-const routePurpleLight = "#aa9cdd";
 
 function Tile({ tile, onLoad, onFail }) {
   const [fallback, setFallback] = useState(!cartoKey);
@@ -159,10 +158,10 @@ export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpe
       {routes.map((route, index) => {
         const active = walks[index].id === activeWalkId;
         return <g key={walks[index].id}>
-          <polyline points={route} fill="none" stroke="#111" strokeOpacity={active ? 1 : .14}
-            strokeWidth={walk.path.length ? 12 : 8} strokeLinejoin="round" strokeLinecap="round"/>
-          <polyline points={route} fill="none" stroke={active ? routePurple : routePurpleLight}
-            strokeOpacity={active ? 1 : .58} strokeWidth={walk.path.length ? 7 : 4} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline points={route} fill="none" stroke={ROUTE_THEME.casing} strokeOpacity={active ? 1 : ROUTE_THEME.dimOpacity}
+            strokeWidth={ROUTE_THEME.casingWeight} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline points={route} fill="none" stroke={ROUTE_THEME.line}
+            strokeOpacity={active ? 1 : ROUTE_THEME.dimOpacity} strokeWidth={ROUTE_THEME.lineWeight} strokeLinejoin="round" strokeLinecap="round"/>
           <polyline className="route-hit" data-map-ui points={route} fill="none" stroke="transparent" strokeWidth="24"
             onClick={() => onOpenWalk?.(walks[index].id)}/>
         </g>;

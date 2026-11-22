@@ -30,11 +30,31 @@ export function summary(walk) {
     .filter(Boolean).join(" · ");
 }
 
-export function RouteList({ walks, selectedId, onOpen, status, filterBar, filtered, onClear }) {
+// Places whose name matches the search: our walks' stops first, then Google's. Tapping one opens its place card.
+function PlaceResults({ places, loading, onPick }) {
+  if (!places.length && !loading) return null;
+  return <section className="place-results" aria-labelledby="place-results-title">
+    <h3 id="place-results-title">Places{loading && <span className="spinner" aria-label="Searching places"/>}</h3>
+    <ul>
+      {places.map(place => <li key={place.placeId}>
+        <button type="button" onClick={() => onPick(place)}>
+          <span className="place-result-icon" aria-hidden="true"><Icon name={place.source === "walks" ? "route" : "search"} size={15}/></span>
+          <span className="place-result-text">
+            <strong>{place.name}</strong>
+            <small>{place.source === "walks" ? `On ${place.onWalks} ${place.onWalks === 1 ? "walk" : "walks"}${place.detail ? ` · ${place.detail}` : ""}` : place.detail}</small>
+          </span>
+        </button>
+      </li>)}
+    </ul>
+  </section>;
+}
+
+export function RouteList({ walks, selectedId, onOpen, status, filterBar, filtered, onClear, places = [], placesLoading = false, onPickPlace }) {
   return <section className="route-list" aria-labelledby="more-walks">
     <h2 id="more-walks" className="list-title">Explore Boston <span>{walks.length} {walks.length === 1 ? "walk" : "walks"}</span></h2>
     {status && <p className="routes-status" role="status">{status}</p>}
     {filterBar}
+    <PlaceResults places={places} loading={placesLoading} onPick={onPickPlace}/>
 
     <ul className="route-cards">
       {walks.map(walk => {

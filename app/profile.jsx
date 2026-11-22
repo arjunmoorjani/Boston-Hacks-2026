@@ -34,10 +34,10 @@ function RouteThumb({ path }) {
     </pattern></defs>
     <rect width={W} height={H} fill="#f2f0eb"/>
     <rect width={W} height={H} fill="url(#streets)"/>
-    <path d={d} fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d={d} fill="none" stroke="#5A45D6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-    <circle cx={pts[0][0]} cy={pts[0][1]} r="6" fill="#00843D" stroke="#fff" strokeWidth="2.5"/>
-    <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="6" fill="#212320" stroke="#fff" strokeWidth="2.5"/>
+    <path d={d} fill="none" style={{ stroke: "var(--route-casing)" }} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d={d} fill="none" style={{ stroke: "var(--route)" }} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx={pts[0][0]} cy={pts[0][1]} r="6" style={{ fill: "var(--stop)", stroke: "var(--stop-ring)" }} strokeWidth="2.5"/>
+    <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="6" style={{ fill: "var(--stop)", stroke: "var(--stop-ring)" }} strokeWidth="2.5"/>
   </svg>;
 }
 
@@ -62,7 +62,7 @@ function TopoArt() {
     return out;
   }, []);
   return <svg className="topo" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-    {paths.map((d, i) => <path key={i} d={d} fill="none" stroke={i % 4 === 0 ? "#FFC21A" : "#8b78f0"} strokeOpacity={i % 4 === 0 ? 0.55 : 0.4} strokeWidth="1.4" strokeDasharray={i % 7 === 3 ? "5 6" : undefined}/>)}
+    {paths.map((d, i) => <path key={i} d={d} fill="none" stroke={i % 4 === 0 ? "#FFC21A" : "#7FB0EA"} strokeOpacity={i % 4 === 0 ? 0.55 : 0.4} strokeWidth="1.4" strokeDasharray={i % 7 === 3 ? "5 6" : undefined}/>)}
   </svg>;
 }
 
@@ -79,7 +79,7 @@ const round1 = n => Math.round(n * 10) / 10;
 
 // ---------- trophies ----------
 const BADGES = [
-  { id: "first", name: "First steps", desc: "Finish a plan", icon: "check", color: "#4B33C9", goal: 1, value: s => s.done },
+  { id: "first", name: "First steps", desc: "Finish a plan", icon: "check", color: "#4A90E2", goal: 1, value: s => s.done },
   { id: "regular", name: "Regular", desc: "Finish 5 plans", icon: "route", color: "#212320", goal: 5, value: s => s.done },
   { id: "lines", name: "Line hopper", desc: "Plans on 3 T lines", icon: "train", color: "#DA291C", goal: 3, value: s => s.lines.size },
   { id: "explorer", name: "Explorer", desc: "5 neighborhoods", icon: "locate", color: "#00843D", goal: 5, value: s => s.areas.size },
@@ -296,7 +296,7 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
                   onClick={() => { if (window.confirm(`Delete “${walk.title}”?`)) onDeleteWalk(walk.id); }}><Icon name="close" size={16}/></button>
               </li>)}
             </ul>
-          : <p className="muted">Fork a plan or tap places on the map to make your own. Saved plans show up here.</p>}
+          : <p className="muted">Modify a plan or tap places on the map to make your own. Saved plans show up here.</p>}
       </section>
 
       {completions.length > 0 && <p className="profile-footer">

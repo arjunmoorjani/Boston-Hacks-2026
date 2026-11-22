@@ -15,6 +15,11 @@ import { PlanEditor } from "./plan-editor";
 import { ProfilePage, RankPrompt } from "./profile";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
+import { followSteps, legFresh, legKey, legMinutes, legsOf, navSteps, splitPathAtStops, travelTotal } from "../lib/legs.mjs";
+import { NavBanner } from "./nav-banner";
+import { popularWalkIds } from "../lib/popular.mjs";
+import { endPlaceSearchSession, googlePlaceSuggestions, localPlaceMatches, mergePlaceResults, MIN_GOOGLE_CHARS } from "../lib/place-search.mjs";
+import { fetchPlaceProfile } from "../lib/place-profile.mjs";
 import { fetchDirections } from "../lib/directions.mjs";
 import { getLocationOnce, watchUserLocation } from "../lib/location.mjs";
 import { saveOuting } from "../lib/save-outing.mjs";
@@ -25,15 +30,10 @@ import { completionFor, emptyProfile, loadProfile, saveProfile } from "../lib/pr
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
-const DIRECTIONS_KEY = "sidewalk.directions.v1";
+const LEG_MODES_KEY = "sidewalk.legModes.v1";
 const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 
 const emptyWalk = { id: "no-route", title: "", area: "", category: "", description: "", stops: [], path: [] };
-
-function legDistance(meters) {
-  if (!Number.isFinite(meters)) return "";
-  return `${(meters / 1609.344).toFixed(1)} mi`;
-}
 
 export default function Home() {
   const [walks, setWalks] = useState(fallbackWalks);
@@ -62,8 +62,6 @@ export default function Home() {
   const [draftTitle, setDraftTitle] = useState("");
   const [removed, setRemoved] = useState(null);   // last removed stop, for Undo
   const [editFrom, setEditFrom] = useState("list");
-  const [routeResults, setRouteResults] = useState({});
-  const [routeStatus, setRouteStatus] = useState("");
   const [toStartMode, setToStartMode] = useState("WALKING");
   // In-app directions: where to, how, and the result. Your location is used for the request only, never stored.
   const [dirTarget, setDirTarget] = useState(null);        // { name, point, placeId? }
@@ -72,6 +70,14 @@ export default function Home() {
   const [dirOrigin, setDirOrigin] = useState(null);
   const [dirFocus, setDirFocus] = useState(null);
   const [dirFrom, setDirFrom] = useState("list");
+  // Getting between stops: how you travel each leg (kept for this browser session) and the routes fetched for them.
+  // Walking legs need no Google call until you ask for their steps or follow them on the walk.
+  const [legModes, setLegModes] = useState({});   // { walkId: { legIndex: "TRANSIT" } }, walking when unset
+  const [legRoutes, setLegRoutes] = useState({}); // legKey -> { status, result, error, at }
+  const legRoutesRef = useRef(legRoutes);
+  legRoutesRef.current = legRoutes;
+  const [navIndex, setNavIndex] = useState(0);    // the turn-by-turn step you're on during a walk
+  const [navHidden, setNavHidden] = useState(false);
   const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
   const allWalks = useMemo(() => [...walks, ...profile.customWalks], [walks, profile.customWalks]);
   // Catalog walks get every filter; your own plans only the search (they have no category/tags).
@@ -79,9 +85,9 @@ export default function Home() {
     ...applyFilters(walks, filters), ...profile.customWalks.filter(item => matchesQuery(item, filters.query)),
   ], [walks, filters, profile.customWalks]);
   const counts = useMemo(() => categoryCounts(walks, filters), [walks, filters]);
+  const popularIds = useMemo(() => popularWalkIds(walks, profile.completions), [walks, profile.completions]); // these glow on the map
   const baseWalk = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
-  const routeResult = baseWalk ? routeResults[baseWalk.id] : null;
-  const walk = useMemo(() => routeResult ? { ...baseWalk, ...routeResult } : baseWalk, [baseWalk, routeResult]);
+  const walk = baseWalk;
   const stats = walk ? walkStats(walk) : null;
   // While editing, the map shows the draft (straight lines between stops) so reordering is visible right away.
   const draftWalk = useMemo(() => {
@@ -89,11 +95,42 @@ export default function Home() {
     const stops = draftPlaces.map(place => ({ id: place.osm_id, name: place.name, address: place.address, point: [Number(place.latitude), Number(place.longitude)] }));
     return { id: `draft:${stops.map(stop => stop.id).join("|")}`, area: "Draft plan", category: "Draft", symbol: "route", stops, path: stops.map(stop => stop.point) };
   }, [view, draftPlaces]);
-  const mapWalk = view === "directions" ? emptyWalk : draftWalk ?? (view === "detail" ? walk : null) ?? emptyWalk;
+
+  // ---------- legs between stops ----------
+  const legs = useMemo(() => legsOf(walk), [walk]);
+  const walkLegModes = walk ? legModes[walk.id] : null;
+  const modeOf = useCallback(index => walkLegModes?.[index] ?? "WALKING", [walkLegModes]);
+  const entryOf = useCallback((leg, mode) => legRoutes[legKey(leg.from, leg.to, mode)] ?? null, [legRoutes]);
+  const legRows = useMemo(() => legs.map(leg => {
+    const mode = modeOf(leg.index), entry = entryOf(leg, mode);
+    return { ...leg, mode, entry, minutes: legMinutes(leg, mode, entry) };
+  }), [legs, modeOf, entryOf]);
+  const travel = useMemo(() => travelTotal(legs, modeOf, entryOf), [legs, modeOf, entryOf]);
+  // On the map, legs you ride or bike are drawn from their route; walking legs keep the walk's own line.
+  const riddenLegs = legRows.filter(leg => leg.mode !== "WALKING" && leg.entry?.status === "ready");
+  const legSegments = useMemo(() => riddenLegs.flatMap(leg => leg.entry.result.segments), [legRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const walkForMap = useMemo(() => {
+    if (!walk || !riddenLegs.length) return walk;
+    const ridden = new Set(riddenLegs.map(leg => leg.index));
+    return { ...walk, paths: splitPathAtStops(walk.path, walk.stops).filter((_, index) => !ridden.has(index)) };
+  }, [walk, legRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------- turn-by-turn while doing a walk: from the stop you left to the one you're heading to ----------
+  const navLeg = view === "detail" && step != null && step > 0 ? legs[step - 1] ?? null : null;
+  const navMode = navLeg ? modeOf(navLeg.index) : null;
+  const navEntry = navLeg ? entryOf(navLeg, navMode) : null;
+  const navKey = navLeg ? legKey(navLeg.from, navLeg.to, navMode) : null;
+  const navList = useMemo(() => navEntry?.status === "ready" ? navSteps(navEntry.result, navLeg.to.name) : [], [navEntry, navLeg]);
+  const navFollow = useMemo(() => followSteps(navList, navIndex, following ? location : null), [navList, navIndex, following, location]);
+  const navStep = navList[navFollow.index];
+  const navFocus = useMemo(() => navLeg && !navHidden && navEntry?.status === "ready"
+    ? (navStep?.path?.length ? navStep.path : [navLeg.to.point]) : null, [navLeg, navHidden, navEntry, navStep]);
+
+  const mapWalk = view === "directions" ? emptyWalk : draftWalk ?? (view === "detail" ? walkForMap : null) ?? emptyWalk;
   const mapWalks = useMemo(() => view === "directions" ? []
     : draftWalk ? [draftWalk]
-    : routesForMap(availableWalks, view === "detail" ? selectedWalkId : null, routeResults),
-  [draftWalk, availableWalks, view, selectedWalkId, routeResults]);
+    : routesForMap(availableWalks, view === "detail" ? selectedWalkId : null).map(item => item.id === walkForMap?.id ? walkForMap : item),
+  [draftWalk, availableWalks, view, selectedWalkId, walkForMap]);
   const closeProfile = useCallback(() => setShowProfile(false), []);
   const mapWalkRef = useRef(mapWalk);
   mapWalkRef.current = mapWalk;
@@ -104,6 +141,55 @@ export default function Home() {
     if (stop?.placeId && googleMapsConfigured) setPlaceProfile({ placeId: stop.placeId, fallback: { name: stop.name, address: stop.address, point: stop.point } });
   }, []);
   const openPlace = useCallback((placeId, fallback) => setPlaceProfile({ placeId, fallback }), []);
+
+  // ---------- finding places by name from the search bar ----------
+  // Stops on our walks match instantly; Google's suggestions come in after a short pause in typing.
+  const [placeSearch, setPlaceSearch] = useState({ query: "", google: [], loading: false });
+  const [searchedPlace, setSearchedPlace] = useState(null); // { placeId, name, point }: pinned on the map
+  const localPlaces = useMemo(() => localPlaceMatches(suggestData.places, filters.query), [suggestData, filters.query]);
+  const placeResults = useMemo(() => filters.query.trim()
+    ? mergePlaceResults(localPlaces, placeSearch.query === filters.query ? placeSearch.google : []) : [],
+  [filters.query, localPlaces, placeSearch]);
+  useEffect(() => {
+    const query = filters.query;
+    setSearchedPlace(null);
+    if (!googleMapsConfigured || view !== "list" || query.trim().length < MIN_GOOGLE_CHARS) {
+      setPlaceSearch({ query, google: [], loading: false });
+      return;
+    }
+    let stale = false;
+    setPlaceSearch(old => ({ ...old, loading: true }));
+    const timer = setTimeout(() => {
+      googlePlaceSuggestions(query)
+        .then(google => { if (!stale) setPlaceSearch({ query, google, loading: false }); })
+        .catch(() => { if (!stale) setPlaceSearch({ query, google: [], loading: false }); }); // our own stops still show
+    }, 300);
+    return () => { stale = true; clearTimeout(timer); };
+  }, [filters.query, view]);
+
+  function pickPlace(place) {
+    endPlaceSearchSession();
+    openPlace(place.placeId, { name: place.name, address: place.detail, point: place.point });
+    setSearchedPlace({ placeId: place.placeId, name: place.name, point: place.point });
+    collapseSheet();
+    // Google's suggestions come without a location: the place card fetches it anyway (cached), so reuse that.
+    if (!place.point) fetchPlaceProfile(place.placeId).then(profile => {
+      if (profile.point) setSearchedPlace(old => old?.placeId === place.placeId ? { ...old, point: profile.point } : old);
+    }).catch(() => {});
+  }
+  const placeFocus = useMemo(() => searchedPlace?.point ? [searchedPlace.point] : null, [searchedPlace]);
+  // The place whose card is open while exploring (picked from search or tapped on the map): pinned on the map,
+  // and Google's other icons are hidden until the card closes.
+  const selectedPlace = useMemo(() => {
+    if (view !== "list" || !placeProfile) return null;
+    if (searchedPlace?.placeId === placeProfile.placeId) return searchedPlace.point ? searchedPlace : null;
+    const point = placeProfile.fallback?.point;
+    return point ? { placeId: placeProfile.placeId, name: placeProfile.fallback?.name ?? "", point } : null;
+  }, [view, placeProfile, searchedPlace]);
+  function closePlace() {
+    setPlaceProfile(null);
+    setSearchedPlace(null);
+  }
   const destination = walk ? walk.stops[step ?? selected ?? 0] : null;
   const directionsMap = useMemo(() => view === "directions" && dirTarget ? {
     destination: dirTarget.point, destinationName: dirTarget.name, origin: dirOrigin,
@@ -131,28 +217,56 @@ export default function Home() {
   }, [profile, profileLoaded]);
   const updateProfile = change => setProfile(old => ({ ...old, ...(typeof change === "function" ? change(old) : change) }));
 
-  // Turn-by-turn steps are fetched only when asked for (the map line already comes with each walk),
-  // and kept for the browser session so reopening a walk or reloading doesn't call Google again.
-  useEffect(() => {
-    try { setRouteResults(JSON.parse(sessionStorage.getItem(DIRECTIONS_KEY) ?? "{}")); } catch {}
+  // A leg's route is fetched once when it's needed (a mode other than walking, its steps, or following it),
+  // then reused; transit routes are fetched again after a couple of minutes because departure times change.
+  const ensureLeg = useCallback(async (from, to, mode) => {
+    const key = legKey(from, to, mode);
+    if (!googleMapsConfigured || legFresh(legRoutesRef.current[key], mode)) return;
+    legRoutesRef.current = { ...legRoutesRef.current, [key]: { status: "loading" } }; // no double request in the same tick
+    setLegRoutes(old => ({ ...old, [key]: { status: "loading" } }));
+    try {
+      const result = await fetchDirections(from.point, to.point, mode);
+      setLegRoutes(old => ({ ...old, [key]: { status: "ready", result, at: Date.now() } }));
+    } catch (error) {
+      const quota = /quota|RESOURCE_EXHAUSTED/i.test(error?.message ?? "");
+      setLegRoutes(old => ({ ...old, [key]: { status: "error", error: quota ? "Google’s directions limit is used up for today." : error?.message || "Couldn’t get this route." } }));
+    }
   }, []);
 
-  async function requestDirections() {
-    if (!baseWalk || routeResults[baseWalk.id] || routeStatus === "loading") return;
-    const id = baseWalk.id;
-    setRouteStatus("loading");
-    try {
-      const route = await buildWalkingRoute(baseWalk.stops);
-      setRouteResults(results => {
-        const next = { ...results, [id]: route };
-        try { sessionStorage.setItem(DIRECTIONS_KEY, JSON.stringify(next)); } catch {}
-        return next;
-      });
-      setRouteStatus("");
-    } catch {
-      setRouteStatus("Couldn’t get directions right now (Google may be over its daily limit). Try again later.");
-    }
+  useEffect(() => {
+    try { setLegModes(JSON.parse(sessionStorage.getItem(LEG_MODES_KEY) ?? "{}")); } catch {}
+  }, []);
+
+  function setLegMode(index, mode) {
+    const leg = legs[index];
+    if (!walk || !leg) return;
+    setLegModes(old => {
+      const forWalk = { ...old[walk.id], [index]: mode };
+      if (mode === "WALKING") delete forWalk[index];
+      const next = { ...old, [walk.id]: forWalk };
+      try { sessionStorage.setItem(LEG_MODES_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    if (mode !== "WALKING") ensureLeg(leg.from, leg.to, mode);
   }
+
+  // Opening a walk where you picked the T or a bike for a leg: get those routes (walking legs stay free).
+  useEffect(() => {
+    if (view !== "detail") return;
+    for (const leg of legs) if (modeOf(leg.index) !== "WALKING") ensureLeg(leg.from, leg.to, modeOf(leg.index));
+  }, [view, legs, modeOf, ensureLeg]);
+
+  // Each new leg of the walk starts at its first step, with its route fetched.
+  useEffect(() => {
+    setNavIndex(0);
+    setNavHidden(false);
+    if (navLeg) ensureLeg(navLeg.from, navLeg.to, navMode);
+  }, [navKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Walking past the end of a step moves on to the next one.
+  useEffect(() => {
+    if (navFollow.index !== navIndex) setNavIndex(navFollow.index);
+  }, [navFollow.index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!following) return;
@@ -188,7 +302,6 @@ export default function Home() {
 
   function resetWalkInteraction() {
     setPlanNotice("");
-    setRouteStatus("");
     setSelected(null);
     setStep(null);
     setComplete(false);
@@ -343,7 +456,7 @@ export default function Home() {
     collapseSheet();
   }
 
-  // Fork: copy this plan's stops into the editor.
+  // Modify: copy this plan's stops into the editor.
   // Continue: start a follow-up plan from this plan's last stop plus the picked "Keep going" stops.
   function fork(extra = []) {
     const asPlace = stop => ({
@@ -357,7 +470,7 @@ export default function Home() {
       const details = new Map(suggestData.places.map(place => [place.placeId, place]));
       startEditing([last, ...extra.map(stop => ({ ...details.get(stop.placeId), ...stop }))].map(asPlace), `After ${walk.title}`, `Continue from ${last.name}`);
     } else {
-      startEditing(walk.stops.map(asPlace), `${walk.title}, your version`, `Forking ${walk.title}`);
+      startEditing(walk.stops.map(asPlace), `${walk.title}, your version`, `Modifying ${walk.title}`);
     }
   }
 
@@ -429,8 +542,14 @@ export default function Home() {
     <div className="map-panel">
       <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={following ? location : null}
         activeWalkId={view === "detail" ? selectedWalkId : null} onOpenWalk={openWalk}
+        legSegments={view === "detail" ? legSegments : null} focusPath={navFocus ?? (view === "list" ? placeFocus : null)}
+        highlight={selectedPlace}
+        doneStops={view === "detail" && step != null ? step : 0} popularIds={popularIds}
         onPlaceClick={openPlace} directions={directionsMap}
         following={following} locationStatus={locationStatus} />
+      {navLeg && !navHidden && <NavBanner leg={navLeg} mode={navMode} entry={navEntry} steps={navList} index={navFollow.index}
+        metersLeft={navFollow.metersLeft} onIndex={setNavIndex} onHide={() => setNavHidden(true)}
+        onRetry={() => ensureLeg(navLeg.from, navLeg.to, navMode)}/>}
     </div>
 
     {/* Phones: transparent space over the map; scrolling the page pulls the sheet up over it. */}
@@ -455,16 +574,14 @@ export default function Home() {
             onBack={() => { changeRoute(null); setView("list"); collapseSheet(); }}
             onSelectStop={index => { selectStop(index); collapseSheet(); }}
             onAdvance={advance} onEndWalk={() => { setStep(null); setSelected(null); }} onFork={fork}
+            legs={legRows} travel={travel} onLegMode={setLegMode}
+            onLegSteps={index => legs[index] && ensureLeg(legs[index].from, legs[index].to, modeOf(index))}
+            navHidden={navHidden && Boolean(navLeg)} onShowNav={() => { setNavHidden(false); collapseSheet(); }}
             routing={<>
                 {planNotice && <p className="plan-notice" role="status"><Icon name="check" size={16}/>{planNotice}</p>}
-                {!walk.legs?.length && googleMapsConfigured && <button type="button" className="catalog-button directions-button"
-                  disabled={routeStatus === "loading"} onClick={requestDirections}>
-                  {routeStatus === "loading" ? "Getting directions…" : "Show turn-by-turn directions"}
-                </button>}
-                {routeStatus && routeStatus !== "loading" && <p className="route-status" role="status">{routeStatus}</p>}
                 {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
 
-                <section className="to-start" aria-labelledby="to-start-title">
+                {step == null && <section className="to-start" aria-labelledby="to-start-title">
                   <div className="to-start-heading">
                     <h3 id="to-start-title">Get to start</h3>
                     <div className="travel-modes" role="group" aria-label="Travel mode to the start">
@@ -476,34 +593,20 @@ export default function Home() {
                     onClick={() => openDirections({ name: walk.stops[0].name, point: walk.stops[0].point, placeId: walk.stops[0].placeId }, toStartMode)}>
                     <Icon name={TRAVEL_MODES.find(([mode]) => mode === toStartMode)?.[2] ?? "walk"} size={16}/>Directions to {walk.stops[0].name}
                   </button>
-                </section>
-
-                {walk.legs?.length > 0 && <section className="route-directions" aria-labelledby="route-directions-title">
-                  <h3 id="route-directions-title">Walking directions</h3>
-                  {walk.legs.map((leg, index) => <details key={`${walk.id}-leg-${index}`}>
-                    <summary>
-                      <span><strong>{walk.stops[index]?.name}</strong> to <strong>{walk.stops[index + 1]?.name}</strong></span>
-                      <small>{legDistance(leg.meters)} · {Math.max(1, Math.round(leg.minutes))} min</small>
-                    </summary>
-                    {leg.steps.length > 0
-                      ? <ol>{leg.steps.map((routeStep, stepIndex) => <li key={`${routeStep.instruction}-${stepIndex}`}>
-                          <span>{routeStep.instruction}</span>
-                          {routeStep.meters > 0 && <small>{legDistance(routeStep.meters)}</small>}
-                        </li>)}</ol>
-                      : <p>No step details returned.</p>}
-                  </details>)}
                 </section>}
+
 
             </>}
             rankSlot={complete && !profile.ranking.includes(walk.id) && <RankPrompt newId={walk.id} ranking={profile.ranking}
               titleOf={id => allWalks.find(item => item.id === id)?.title ?? profile.completions.find(c => c.walkId === id)?.title ?? id}
               onDone={ranking => updateProfile({ ranking })}/>}/>
         : <RouteList walks={availableWalks} selectedId={selectedWalkId} status={walksStatus} onOpen={openWalk}
+            places={placeResults} placesLoading={placeSearch.loading} onPickPlace={pickPlace}
             filtered={anyActive(filters)} onClear={() => setFilters(emptyFilters)}
             filterBar={<RouteFilters filters={filters} onChange={setFilters} counts={counts}/>}/>}
     </section>
     {placeProfile && <PlaceProfile key={placeProfile.placeId} placeId={placeProfile.placeId} fallback={placeProfile.fallback}
-      onClose={() => setPlaceProfile(null)} addLabel={addLabelFor(placeProfile.placeId)}
+      onClose={closePlace} addLabel={addLabelFor(placeProfile.placeId)}
       onDirections={place => openDirections({ name: place.name, point: place.point, placeId: placeProfile.placeId })}
       onAdd={place => addPlace({
         osm_id: `google:${placeProfile.placeId}`, placeId: placeProfile.placeId, name: place.name,

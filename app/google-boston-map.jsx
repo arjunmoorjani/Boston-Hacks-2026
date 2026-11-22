@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MetroIcon } from "@hugeicons/core-free-icons";
-import { googleMapId, loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
+import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
+import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
+import { LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, minZoomFor, placesForView } from "../lib/nearby-places.mjs";
+import { CITIES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
-
-const routePurple = "#5839b5";
-const routePurpleLight = "#aa9cdd";
 
 function lineScale(zoom = 14) {
   const normalized = Math.max(0, Math.min(1, (zoom - 10) / 5));
@@ -17,11 +17,6 @@ function lineScale(zoom = 14) {
 function tLineWeights(zoom = 14) {
   const closeUp = lineScale(zoom);
   return { outline: 4 + (10 * closeUp), color: 2 + (6 * closeUp) };
-}
-
-function walkLineWeights(zoom = 14) {
-  const closeUp = lineScale(zoom);
-  return { outline: 3.5 + (8.5 * closeUp), color: 2 + (5 * closeUp) };
 }
 
 function fitWalks({ map, maps }, walks) {
@@ -59,27 +54,135 @@ function fitPoints({ map, maps }, points) {
   map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 } : { top: 120, left: 40, right: 70, bottom: 40 });
 }
 
-function addMarker({ map, AdvancedMarkerElement }, { point, label, onClick, className, text, zIndex, collisionBehavior }) {
-  const marker = new AdvancedMarkerElement({
-    map, position: mapPoint(point), title: label, gmpClickable: Boolean(onClick),
-    anchorTop: "-50%", zIndex, collisionBehavior,
-  });
-  const content = document.createElement("span");
-  content.className = className;
-  content.textContent = text;
-  content.setAttribute("aria-hidden", "true");
-  marker.append(content);
-  if (onClick) marker.addEventListener("gmp-click", onClick);
-  return marker;
+// Directions on the map: dotted walking, solid bike and car in the route blue, rides in their MBTA line color.
+// Returns the lines to remove later.
+function drawSegments({ map, maps }, segments) {
+  const overlays = [];
+  for (const segment of segments ?? []) {
+    const path = segment.path.map(mapPoint);
+    if (path.length < 2) continue;
+    if (segment.kind === "transit") {
+      overlays.push(new maps.Polyline({ map, path, strokeColor: ROUTE_THEME.casing, strokeWeight: 10, clickable: false, zIndex: 22 }));
+      overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 6, clickable: false, zIndex: 23 }));
+    } else if (segment.kind === "bike" || segment.kind === "drive") {
+      overlays.push(new maps.Polyline({ map, path, strokeColor: ROUTE_THEME.casing, strokeWeight: ROUTE_THEME.casingWeight, clickable: false, zIndex: 22 }));
+      overlays.push(new maps.Polyline({ map, path, strokeColor: ROUTE_THEME.line, strokeWeight: ROUTE_THEME.lineWeight, clickable: false, zIndex: 23 }));
+    } else {
+      overlays.push(new maps.Polyline({
+        map, path, strokeOpacity: 0, clickable: false, zIndex: 24,
+        icons: [{ icon: { path: maps.SymbolPath.CIRCLE, scale: 3, fillColor: ROUTE_THEME.line, fillOpacity: 1, strokeColor: ROUTE_THEME.casing, strokeWeight: 1.5 }, offset: "0", repeat: "11px" }],
+      }));
+    }
+  }
+  return overlays;
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, location, following, locationStatus, onPlaceClick, directions }) {
+// HTML markers drawn with an OverlayView (Advanced Markers need a mapId, which this map can't have): your location
+// dot, the directions pins, our place markers and our text labels. Centered on the point unless `transform` says
+// otherwise; `content` is an element to show instead of an empty span; `onClick` makes it tappable.
+// Remove with setMap(null).
+function htmlMarkerClass(maps) {
+  return class HtmlMarker extends maps.OverlayView {
+    constructor({ map, point, label, className, zIndex = 40, content, onClick, transform = "translate(-50%,-50%)" }) {
+      super();
+      this.position = new maps.LatLng(point[0], point[1]);
+      this.interactive = Boolean(onClick);
+      this.div = document.createElement("div");
+      this.div.style.cssText = `position:absolute;transform:${transform};z-index:${zIndex};pointer-events:${this.interactive ? "auto" : "none"};`;
+      this.div.title = label ?? "";
+      let inner = content;
+      if (!inner) {
+        inner = document.createElement("span");
+        inner.className = className;
+        inner.setAttribute("aria-hidden", "true");
+      }
+      this.div.append(inner);
+      if (onClick) this.div.addEventListener("click", event => { event.stopPropagation(); onClick(); });
+      this.setMap(map);
+    }
+    onAdd() {
+      if (this.interactive) maps.OverlayView.preventMapHitsAndGesturesFrom?.(this.div); // a tap opens the place, not the map
+      // labels and pins sit on top of the route lines; they take no taps, so places under them stay tappable
+      this.getPanes()[this.interactive ? "overlayMouseTarget" : "floatPane"].appendChild(this.div);
+    }
+    draw() {
+      const at = this.getProjection()?.fromLatLngToDivPixel(this.position);
+      if (!at) return;
+      this.div.style.left = `${at.x}px`;
+      this.div.style.top = `${at.y}px`;
+    }
+    onRemove() { this.div.remove(); }
+  };
+}
+
+function addHtmlMarker({ map, HtmlMarker }, options) {
+  return new HtmlMarker({ map, ...options });
+}
+
+// Text on the map in the app's font (city and neighborhood names, stop names).
+function textLabel(context, { point, text, className, transform, zIndex = 2 }) {
+  const span = document.createElement("span");
+  span.className = `map-text ${className}`;
+  span.textContent = text;
+  span.setAttribute("aria-hidden", "true");
+  return addHtmlMarker(context, { point, content: span, transform, zIndex });
+}
+
+// One of our place markers: our icon in a Google-colored dot, with the place's name (shown when zoomed in close).
+function placeMarker(context, place, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "poi-marker";
+  button.style.setProperty("--poi", place.color);
+  button.setAttribute("aria-label", place.name);
+  const dot = document.createElement("span");
+  dot.className = "poi-dot";
+  dot.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON_PATHS[place.icon] ?? ICON_PATHS.place}"/></svg>`;
+  const name = document.createElement("span");
+  name.className = "poi-name";
+  name.textContent = place.name;
+  button.append(dot, name);
+  return addHtmlMarker(context, { point: place.point, content: button, onClick, transform: "translate(-11px,-50%)", zIndex: 6 });
+}
+
+// A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
+// bigger when selected, blue with a check once you've done it.
+function stopMarkerIcon(maps, stop, number, { selected = false, done = false } = {}) {
+  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done });
+  return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
+}
+
+// Two lines per route: a white casing under the blue line. The open walk is at full strength, others dimmed.
+// Popular walks glow: soft light-blue halos under the casing, and they stay at full strength.
+// The editor's draft (straight lines between stops) is a dashed, lighter line.
+function drawRoute(maps, map, path, { active, draft, popular }) {
+  const { line, casing, glow, lineWeight, casingWeight, dimOpacity, draftOpacity } = ROUTE_THEME;
+  const opacity = draft ? draftOpacity : active || popular ? 1 : dimOpacity;
+  const z = active ? 20 : popular ? 10 : 4;
+  const halos = popular && !draft ? [
+    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.12, strokeWeight: casingWeight + 16, clickable: false, zIndex: z }),
+    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.22, strokeWeight: casingWeight + 8, clickable: false, zIndex: z }),
+  ] : [];
+  const under = new maps.Polyline({ map, path, strokeColor: casing, strokeOpacity: opacity, strokeWeight: casingWeight, clickable: false, zIndex: z + 1 });
+  const over = draft
+    ? new maps.Polyline({
+        map, path, strokeOpacity: 0, clickable: false, zIndex: z + 2,
+        icons: [{ icon: { path: "M 0,-1 0,1", strokeColor: line, strokeOpacity: opacity, strokeWeight: lineWeight, scale: 2 }, offset: "0", repeat: "10px" }],
+      })
+    : new maps.Polyline({ map, path, strokeColor: line, strokeOpacity: opacity, strokeWeight: lineWeight, clickable: false, zIndex: z + 2 });
+  return [...halos, under, over];
+}
+
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, highlight, location, following, locationStatus, onPlaceClick, directions }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
   const previousActiveWalk = useRef(activeWalkId);
   const [context, setContext] = useState(null);
   const [transit, setTransit] = useState(false);
+  const [zoom, setZoom] = useState(14);
+  const [nearby, setNearby] = useState([]);           // our place markers while exploring
+  const [nearbyFailed, setNearbyFailed] = useState(false); // Nearby Search unavailable: show Google's icons instead
   const [mapError, setMapError] = useState("");
   const placeClick = useRef(onPlaceClick);
   placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
@@ -88,17 +191,16 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   useEffect(() => {
     let disposed = false;
-    let poiClickListener;
+    let poiClickListener, zoomListener;
     const handleAuthFailure = () => setMapError("Google Maps couldn’t authenticate. Check the key and website restrictions.");
     window.addEventListener("sidewalk-google-auth-failure", handleAuthFailure);
 
     loadGoogleMaps().then(async maps => {
-      const [{ Map }, { AdvancedMarkerElement }] = await Promise.all([
-        maps.importLibrary("maps"), maps.importLibrary("marker"),
-      ]);
+      const { Map } = await maps.importLibrary("maps");
       if (disposed) return;
+      // No mapId on purpose: Google ignores `styles` on a map that has one.
       const map = new Map(container.current, {
-        center: { lat: 42.355, lng: -71.07 }, zoom: 14, mapId: googleMapId,
+        center: { lat: 42.355, lng: -71.07 }, zoom: 14, styles: EXPLORE_STYLE,
         disableDefaultUI: true, keyboardShortcuts: true, gestureHandling: "greedy",
         clickableIcons: true, maxZoom: 20, minZoom: 3,
       });
@@ -108,7 +210,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         event.stop();
         placeClick.current?.(event.placeId, { point: event.latLng ? [event.latLng.lat(), event.latLng.lng()] : null });
       });
-      setContext({ map, maps, AdvancedMarkerElement });
+      zoomListener = map.addListener("zoom_changed", () => setZoom(map.getZoom()));
+      setContext({ map, maps, HtmlMarker: htmlMarkerClass(maps) });
     }).catch(() => {
       if (!disposed) setMapError("Couldn’t load Google Maps. Check your connection and API settings.");
     });
@@ -116,9 +219,122 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     return () => {
       disposed = true;
       poiClickListener?.remove();
+      zoomListener?.remove();
       window.removeEventListener("sidewalk-google-auth-failure", handleAuthFailure);
     };
   }, []);
+
+  // The map area changes size when the sheet's resting height changes (e.g. opening a walk): frame the walks again.
+  const walksRef = useRef(walks);
+  walksRef.current = walks;
+  useEffect(() => {
+    if (!context || typeof ResizeObserver === "undefined") return;
+    let lastHeight = container.current.clientHeight;
+    let timer;
+    const observer = new ResizeObserver(() => {
+      const height = container.current?.clientHeight ?? 0;
+      if (Math.abs(height - lastHeight) < 4) return;
+      lastHeight = height;
+      // give Google a moment to pick up the new size first, or it frames for the old one
+      clearTimeout(timer);
+      timer = setTimeout(() => fitWalks(context, walksRef.current), 150);
+    });
+    observer.observe(container.current);
+    return () => { observer.disconnect(); clearTimeout(timer); };
+  }, [context]);
+
+  // Exploring: our own place markers instead of Google's icons (or Google's if ours can't load). A walk is open, or a
+  // place is selected (its card is open): no place icons at all, so only the walk's stops or that place show.
+  const focused = Boolean(activeWalkId) || Boolean(highlight?.point);
+  const showPlaces = !focused && !nearbyFailed && zoom >= PLACES_MIN_ZOOM;
+  useEffect(() => {
+    if (!context) return;
+    context.map.setOptions({
+      styles: focused ? WALK_OPEN_STYLE : nearbyFailed ? EXPLORE_GOOGLE_ICONS_STYLE : EXPLORE_STYLE,
+      clickableIcons: !focused,
+    });
+  }, [context, focused, nearbyFailed]);
+
+  // Load places for the area on screen whenever the map settles (lib/nearby-places.mjs caches by area).
+  useEffect(() => {
+    if (!context || focused || nearbyFailed) return;
+    const { map } = context;
+    let stale = false;
+    const load = () => {
+      if (map.getZoom() < PLACES_MIN_ZOOM) return;
+      const bounds = map.getBounds(), center = map.getCenter();
+      if (!bounds || !center) return;
+      const { north, south, east, west } = bounds.toJSON();
+      placesForView({ north, south, east, west }, [center.lat(), center.lng()]).then(({ places, failed }) => {
+        if (stale) return;
+        if (failed && !places.length) setNearbyFailed(true);
+        else setNearby(places);
+      });
+    };
+    const idle = map.addListener("idle", load);
+    load();
+    return () => { stale = true; idle.remove(); };
+  }, [context, focused, nearbyFailed]);
+
+  // Draw our place markers that this zoom has reached (lib/nearby-places.mjs: prominent places show farther out),
+  // adding and removing only what changed. `nearby` is in prominence order.
+  const placeMarkers = useRef(new Map());
+  const visiblePlaces = useMemo(() => showPlaces ? nearby.filter(place => zoom >= minZoomFor(place)) : [], [showPlaces, nearby, zoom]);
+  useEffect(() => {
+    if (!context) return;
+    const drawn = placeMarkers.current;
+    const keep = new Set(visiblePlaces.map(place => place.placeId));
+    for (const [id, marker] of drawn) if (!keep.has(id)) { marker.setMap(null); drawn.delete(id); }
+    for (const place of visiblePlaces) {
+      if (!drawn.has(place.placeId)) drawn.set(place.placeId, placeMarker(context, place,
+        () => placeClick.current?.(place.placeId, { name: place.name, point: place.point })));
+    }
+  }, [context, visiblePlaces]);
+  useEffect(() => () => { for (const marker of placeMarkers.current.values()) marker.setMap(null); }, []);
+
+  // Google's rule for crowded spots, most prominent first: an icon that would overlap a more prominent one waits
+  // for a closer zoom, and a name that would overlap a shown icon or name is left off (its icon stays).
+  // Re-checked whenever the map settles.
+  useEffect(() => {
+    if (!context || !visiblePlaces.length) return;
+    const overlaps = (a, b, gap) => a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top;
+    const declutter = () => {
+      const shown = [];
+      const dots = [];
+      for (const place of visiblePlaces) {
+        const marker = placeMarkers.current.get(place.placeId);
+        const button = marker?.div.firstElementChild;
+        if (!button) continue;
+        button.classList.remove("poi-hidden");
+        const dot = button.querySelector(".poi-dot").getBoundingClientRect();
+        if (dots.some(other => overlaps(dot, other, 2))) button.classList.add("poi-hidden");
+        else { dots.push(dot); shown.push(button); }
+      }
+      if (zoom < LABEL_ZOOM) return;
+      const names = [];
+      for (const button of shown) {
+        const name = button.querySelector(".poi-name");
+        name.classList.remove("poi-name-hidden");
+        const box = name.getBoundingClientRect();
+        if (!box.width) continue;
+        if (names.some(other => overlaps(box, other, 3)) || dots.some(dot => overlaps(box, dot, 3))) name.classList.add("poi-name-hidden");
+        else names.push(box);
+      }
+    };
+    const frame = requestAnimationFrame(declutter);
+    const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
+    return () => { cancelAnimationFrame(frame); idle.remove(); };
+  }, [context, visiblePlaces, zoom]);
+
+  // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
+  useEffect(() => {
+    if (!context) return;
+    const labels = [
+      ...CITIES.map(city => textLabel(context, { point: city.point, text: city.name, className: "city-label" })),
+      ...NEIGHBORHOODS.map(hood => textLabel(context, { point: hood.point, text: hood.name, className: "hood-label" })),
+    ];
+    return () => { for (const label of labels) label.setMap(null); };
+  }, [context]);
 
   useEffect(() => {
     if (!context) return;
@@ -166,42 +382,30 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       const center = map.getCenter();
       browseView.current = center ? { center: center.toJSON(), zoom: map.getZoom() } : null;
     }
-    const lines = walks.flatMap(item => {
-      const path = item.path.map(mapPoint);
+    // A walk with legs by T or bike has its walking pieces in `paths`; the ridden legs are drawn from their routes.
+    const lines = walks.flatMap(item => (item.paths ?? [item.path]).flatMap(piece => {
+      const path = piece.map(mapPoint);
       if (!path.length) return [];
       const active = item.id === activeWalkId;
+      const draft = String(item.id).startsWith("draft:");
       const hit = new maps.Polyline({
         map, path, strokeColor: "#000000", strokeOpacity: .01, strokeWeight: 24,
         clickable: true, cursor: "pointer", zIndex: active ? 24 : 8,
       });
       const clickListener = hit.addListener("click", () => walkClick.current?.(item.id));
-      return [{
-        active,
-        outline: new maps.Polyline({
-          map, path, strokeColor: "#111111", strokeOpacity: active ? 1 : .14,
-          clickable: false, zIndex: active ? 20 : 4,
-        }),
-        color: new maps.Polyline({
-          map, path, strokeColor: active ? routePurple : routePurpleLight,
-          strokeOpacity: active ? 1 : .58, clickable: false, zIndex: active ? 21 : 5,
-        }),
-        hit,
-        clickListener,
-      }];
-    });
-    const resizeLines = () => {
-      const weights = walkLineWeights(map.getZoom());
-      for (const line of lines) {
-        line.outline.setOptions({ strokeWeight: weights.outline });
-        line.color.setOptions({ strokeWeight: weights.color });
-      }
-    };
-    resizeLines();
-    const zoomListener = map.addListener("zoom_changed", resizeLines);
-    stops.current = walk.stops.map((stop, index) => addMarker(context, {
-      point: stop.point, label: `Stop ${index + 1}: ${stop.name}`, onClick: () => onSelect(index),
-      className: "google-pin", text: String(index + 1), zIndex: 30,
+      return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id) }), hit, clickListener }];
     }));
+    const stopLabels = walk.stops.map(stop => textLabel(context, {
+      point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)", zIndex: 3,
+    }));
+    stops.current = walk.stops.map((stop, index) => {
+      const marker = new maps.Marker({
+        map, position: mapPoint(stop.point), title: `Stop ${index + 1}: ${stop.name}`,
+        icon: stopMarkerIcon(maps, stop, index + 1), zIndex: 30,
+      });
+      marker.addListener("click", () => onSelect(index));
+      return marker;
+    });
     if (leavingWalk && browseView.current) {
       map.setCenter(browseView.current.center);
       map.setZoom(browseView.current.zoom);
@@ -211,48 +415,49 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     }
     previousActiveWalk.current = activeWalkId;
     return () => {
-      zoomListener.remove();
       for (const line of lines) {
-        line.outline.setMap(null);
-        line.color.setMap(null);
+        for (const polyline of line.drawn) polyline.setMap(null);
         line.hit.setMap(null);
         line.clickListener.remove();
       }
-      for (const marker of stops.current) marker.map = null;
+      for (const marker of stops.current) marker.setMap(null);
+      for (const label of stopLabels) label.setMap(null);
       stops.current = [];
     };
-  }, [context, walk, walks, onSelect, activeWalkId]);
+  }, [context, walk, walks, onSelect, activeWalkId, popularIds]);
 
   // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
     if (!context || !directions) return;
-    const { map, maps } = context;
-    const overlays = [];
-    for (const segment of directions.segments ?? []) {
-      const path = segment.path.map(mapPoint);
-      if (path.length < 2) continue;
-      if (segment.kind === "transit") {
-        overlays.push(new maps.Polyline({ map, path, strokeColor: "#111111", strokeWeight: 12, clickable: false, zIndex: 2 }));
-        overlays.push(new maps.Polyline({ map, path, strokeColor: segment.line.color, strokeWeight: 7, clickable: false, zIndex: 3 }));
-      } else if (segment.kind === "bike" || segment.kind === "drive") {
-        overlays.push(new maps.Polyline({ map, path, strokeColor: "#fff", strokeWeight: 9, clickable: false, zIndex: 3 }));
-        overlays.push(new maps.Polyline({ map, path, strokeColor: "#4B33C9", strokeWeight: 5, clickable: false, zIndex: 4 }));
-      } else {
-        overlays.push(new maps.Polyline({
-          map, path, strokeOpacity: 0, clickable: false, zIndex: 4,
-          icons: [{ icon: { path: maps.SymbolPath.CIRCLE, scale: 3.4, fillColor: "#269ad5", fillOpacity: 1, strokeColor: "#111111", strokeWeight: 2 }, offset: "0", repeat: "12px" }],
-        }));
-      }
-    }
+    const overlays = drawSegments(context, directions.segments);
     const markers = [
-      directions.origin && addMarker(context, { point: directions.origin, label: "Your location", className: "google-location", text: "", zIndex: 40 }),
-      addMarker(context, { point: directions.destination, label: directions.destinationName, className: "dir-dest-pin", text: "", zIndex: 41 }),
+      directions.origin && addHtmlMarker(context, { point: directions.origin, label: "Your location", className: "google-location", zIndex: 40 }),
+      addHtmlMarker(context, { point: directions.destination, label: directions.destinationName, className: "dir-dest-pin", zIndex: 41 }),
     ].filter(Boolean);
     return () => {
       for (const line of overlays) line.setMap(null);
-      for (const marker of markers) marker.map = null;
+      for (const marker of markers) marker.setMap(null);
     };
   }, [context, directions]);
+
+  // A place picked from the search bar: a pin where it is.
+  useEffect(() => {
+    if (!context || !highlight?.point) return;
+    const pin = addHtmlMarker(context, { point: highlight.point, label: highlight.name, className: "dir-dest-pin", zIndex: 41 });
+    return () => pin.setMap(null);
+  }, [context, highlight]);
+
+  // Legs of the open walk that you ride or bike.
+  useEffect(() => {
+    if (!context || !legSegments?.length) return;
+    const overlays = drawSegments(context, legSegments);
+    return () => { for (const line of overlays) line.setMap(null); };
+  }, [context, legSegments]);
+
+  // During a walk: frame the turn-by-turn step you're on.
+  useEffect(() => {
+    if (context && focusPath?.length) fitPoints(context, focusPath);
+  }, [context, focusPath]);
 
   // Frame the whole trip, or just the step the user tapped.
   useEffect(() => {
@@ -263,18 +468,27 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     fitPoints(context, points);
   }, [context, directions]);
 
+  // Selected stop is bigger; stops you've already done on a walk turn blue with a check.
   useEffect(() => {
-    stops.current.forEach((marker, index) => marker.firstElementChild.classList.toggle("selected", selected === index));
-  }, [context, walk, selected]);
+    if (!context) return;
+    stops.current.forEach((marker, index) => {
+      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, { selected: selected === index, done: index < doneStops }));
+      marker.setZIndex(selected === index ? 31 : 30);
+    });
+  }, [context, walk, selected, doneStops]);
 
   useEffect(() => {
     if (!context || !location) return;
-    const dot = addMarker(context, { point: location, label: "Your location", className: "google-location", text: "", zIndex: 40 });
+    const dot = addHtmlMarker(context, { point: location, label: "Your location", className: "google-location", zIndex: 40 });
     if (following) context.map.panTo(mapPoint(location));
-    return () => { dot.map = null; };
+    return () => dot.setMap(null);
   }, [context, location, following]);
 
-  return <section className="map google-map" aria-label="Interactive Boston map">
+  // Which of our labels show at this zoom (see .zoom-* rules in app/styles.css).
+  const level = areaLevel(zoom);
+  const zoomClasses = [level.city && "zoom-city", level.hood && "zoom-hood", zoom >= 15 && "zoom-stops", zoom >= LABEL_ZOOM && "zoom-names"].filter(Boolean).join(" ");
+
+  return <section className={`map google-map ${zoomClasses}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
     <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}

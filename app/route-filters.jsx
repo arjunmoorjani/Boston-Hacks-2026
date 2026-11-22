@@ -20,7 +20,7 @@ export function RouteFilters({ filters, onChange, counts }) {
     <div className="filter-search">
       <Icon name="search" size={17}/>
       <input type="search" value={filters.query} placeholder="Search walks, places, neighborhoods"
-        aria-label="Search walks" onChange={event => onChange(f => ({ ...f, query: event.target.value }))}/>
+        aria-label="Search walks and places" onChange={event => onChange(f => ({ ...f, query: event.target.value }))}/>
       {filters.query && <button type="button" aria-label="Clear search" onClick={() => onChange(f => ({ ...f, query: "" }))}><Icon name="close" size={15}/></button>}
     </div>
 
