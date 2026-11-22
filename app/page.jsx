@@ -718,7 +718,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       onRank={ranking => updateProfile({ ranking })}
       onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
-    {showLog && <LogPage onLog={logPreviousExcursion}/>}
+    <div hidden={!showLog}><LogPage visible={showLog} onLog={logPreviousExcursion}/></div>
     <nav className="bottom-nav" aria-label="Primary navigation">
       <button type="button" className="bottom-nav-button" aria-label="Map" aria-current={!showProfile && !showLog ? "page" : undefined}
         onClick={openMapScreen}>

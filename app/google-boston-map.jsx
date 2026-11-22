@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MetroIcon } from "@hugeicons/core-free-icons";
+import { MetroIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
 import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
@@ -48,7 +48,7 @@ function fitWalks({ map, maps }, walks) {
 }
 
 // Fit the map to a set of [lat, lng] points, leaving room for the top bar and the sheet/panel.
-function fitPoints({ map, maps }, points) {
+function fitPoints({ map, maps }, points, padding) {
   if (!points.length) return;
   const bounds = new maps.LatLngBounds();
   for (const point of points) bounds.extend(mapPoint(point));
@@ -59,7 +59,7 @@ function fitPoints({ map, maps }, points) {
     return;
   }
   const wide = map.getDiv().clientWidth >= 900;
-  map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 } : { top: 120, left: 40, right: 70, bottom: 40 });
+  map.fitBounds(bounds, padding ?? (wide ? { top: 100, left: 450, right: 80, bottom: 60 } : { top: 120, left: 40, right: 70, bottom: 40 }));
 }
 
 // Directions on the map: dotted walking, solid bike and car in the route blue, rides in their MBTA line color.
@@ -190,7 +190,7 @@ function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, userLocationIcon = false, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -544,15 +544,44 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
     if (!context || !directions) return;
-    const overlays = directions.approachPath?.length ? [new context.maps.Polyline({
-      map: context.map, path: directions.approachPath.map(mapPoint), strokeOpacity: 0, clickable: false, zIndex: 35,
-      icons: [{ icon: { path: context.maps.SymbolPath.CIRCLE, scale: 3, strokeOpacity: 0,
-        fillColor: ROUTE_THEME.line, fillOpacity: 1 }, offset: "0", repeat: "11px" }],
-    })] : drawSegments(context, directions.segments);
-    const markers = [
-      directions.origin && addHtmlMarker(context, { point: directions.origin, label: "Your location", className: "google-location", zIndex: 40 }),
-      addHtmlMarker(context, { point: directions.destination, label: directions.destinationName, className: "dir-dest-pin", zIndex: 41 }),
-    ].filter(Boolean);
+    const { map, maps } = context;
+    const legs = directions.excursionLegs ?? [{
+      path: directions.approachPath ?? [],
+      destination: directions.destination,
+      destinationName: directions.destinationName,
+      duration: directions.duration,
+    }];
+    const overlays = directions.approachPath?.length ? [] : drawSegments(context, directions.segments);
+    const markers = [];
+    if (directions.origin) {
+      markers.push(addHtmlMarker(context, { point: directions.origin, label: "Your location", className: "google-location", zIndex: 40 }));
+    }
+    for (const leg of legs) {
+      markers.push(addHtmlMarker(context, {
+        point: leg.destination, label: leg.destinationName,
+        className: leg.completed ? "dir-dest-pin dir-dest-reached" : "dir-dest-pin", zIndex: 41,
+      }));
+      const { path } = leg;
+      if (path.length < 2) continue;
+      overlays.push(new maps.Polyline({
+        map, path: path.map(mapPoint), strokeColor: ROUTE_THEME.line, strokeWeight: 4,
+        strokeOpacity: leg.completed ? 0.75 : 0, clickable: false, zIndex: leg.completed ? 34 : 35,
+        icons: leg.completed ? [] : [{
+          icon: { path: maps.SymbolPath.CIRCLE, scale: 3, strokeOpacity: 0, fillColor: ROUTE_THEME.line, fillOpacity: 1 },
+          offset: "0", repeat: "11px",
+        }],
+      }));
+      if (leg.completed || !leg.duration) continue;
+      const middle = (path.length - 1) / 2;
+      const before = path[Math.floor(middle)];
+      const after = path[Math.ceil(middle)];
+      markers.push(textLabel(context, {
+        point: [(before[0] + after[0]) / 2, (before[1] + after[1]) / 2],
+        text: leg.duration,
+        className: "dir-route-duration",
+        transform: "translate(-50%, -145%)",
+      }));
+    }
     return () => {
       for (const line of overlays) line.setMap(null);
       for (const marker of markers) marker.setMap(null);
@@ -581,6 +610,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // Frame the whole trip, or just the step the user tapped.
   useEffect(() => {
     if (!context || !directions) return;
+    if (directions.excursionLegs) {
+      const points = directions.excursionLegs.flatMap(leg => [...leg.path, leg.destination]);
+      fitPoints(context, points, 44);
+      return;
+    }
     const segment = directions.focus != null ? directions.segments?.[directions.focus] : null;
     const points = segment?.path.length ? segment.path
       : [...(directions.origin ? [directions.origin] : []), directions.destination,
@@ -599,10 +633,25 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   useEffect(() => {
     if (!context || !location) return;
-    const dot = addHtmlMarker(context, { point: location, label: "Your location", className: "google-location", zIndex: 40 });
+    const content = userLocationIcon ? document.createElement("span") : null;
+    if (content) {
+      content.className = "google-location-user";
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("aria-hidden", "true");
+      for (const [tag, attributes] of UserIcon) {
+        const element = document.createElementNS(svg.namespaceURI, tag);
+        for (const [key, value] of Object.entries(attributes)) {
+          if (key !== "key") element.setAttribute(key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`), value);
+        }
+        svg.append(element);
+      }
+      content.append(svg);
+    }
+    const dot = addHtmlMarker(context, { point: location, label: "Your location", className: "google-location", content, zIndex: 40 });
     if (following) context.map.panTo(mapPoint(location));
     return () => dot.setMap(null);
-  }, [context, location, following]);
+  }, [context, location, following, userLocationIcon]);
 
   // Which of our labels show at this zoom (see .zoom-* rules in app/styles.css).
   const level = areaLevel(zoom);
