@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MetroIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
+import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, POPULAR_ROUTE_HALOS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, popularMapStops, stopMarker } from "../lib/map-style.mjs";
 import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
 import { CITIES, FEATURES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
@@ -163,8 +163,8 @@ function placeMarker(context, place, onClick) {
 
 // A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
 // bigger when selected, blue with a check once you've done it.
-function stopMarkerIcon(maps, stop, number, { selected = false, done = false } = {}) {
-  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done });
+function stopMarkerIcon(maps, stop, number, options) {
+  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), ...options });
   return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
 }
 
@@ -172,14 +172,16 @@ function stopMarkerIcon(maps, stop, number, { selected = false, done = false } =
 // Popular walks glow: soft light-blue halos under the casing, and they stay at full strength.
 // The editor's draft (straight lines between stops) is a dashed, lighter line.
 function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
-  const { casing, glow, lineWeight, casingWeight, dimOpacity, draftOpacity } = ROUTE_THEME;
+  const { casing, glow, dimOpacity, draftOpacity, popularWeightBoost } = ROUTE_THEME;
+  const boost = popular && !draft ? popularWeightBoost : 0;
+  const lineWeight = ROUTE_THEME.lineWeight + boost;
+  const casingWeight = ROUTE_THEME.casingWeight + boost;
   const line = favorite ? ROUTE_THEME.favorite : ROUTE_THEME.line; // hearted walks are pink
   const opacity = draft ? draftOpacity : active || popular || favorite ? 1 : dimOpacity; // favorites stand out too
   const z = active ? 20 : favorite ? 14 : popular ? 10 : 4;
-  const halos = popular && !draft ? [
-    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.12, strokeWeight: casingWeight + 16, clickable: false, zIndex: z }),
-    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.22, strokeWeight: casingWeight + 8, clickable: false, zIndex: z }),
-  ] : [];
+  const halos = boost ? POPULAR_ROUTE_HALOS.map(({ extraWeight, opacity }) => new maps.Polyline({
+    map, path, strokeColor: glow, strokeOpacity: opacity, strokeWeight: casingWeight + extraWeight, clickable: false, zIndex: z,
+  })) : [];
   const under = new maps.Polyline({ map, path, strokeColor: casing, strokeOpacity: opacity, strokeWeight: casingWeight, clickable: false, zIndex: z + 1 });
   const over = draft
     ? new maps.Polyline({
@@ -269,6 +271,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // Exploring: our own place markers instead of Google's icons (or Google's if ours can't load). A walk is open, or a
   // place is selected (its card is open): no place icons at all, so only the walk's stops or that place show.
   const focused = Boolean(activeWalkId) || Boolean(highlight?.point);
+  const overviewStops = useMemo(() => focused || walk.stops.length ? [] : popularMapStops(walks, popularIds),
+    [focused, walk.stops.length, walks, popularIds]);
+  const overviewPlaceIds = useMemo(() => new Set(overviewStops.map(({ stop }) => stop.placeId)), [overviewStops]);
   const showPlaces = !focused && !nearbyFailed && (alwaysShowPlaces || zoom >= PLACES_MIN_ZOOM);
   // From zoom 15 (where our place data loads) park and T names are ours, on top of everything; Google's are off.
   const ourTopNames = !nearbyFailed && !parkNamesFailed && zoom >= PLACES_MIN_ZOOM;
@@ -341,7 +346,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const placeMarkers = useRef(new Map());
   const visiblePlaces = useMemo(() => showPlaces
     ? nearby.filter(place => place.icon !== "train" && (alwaysShowPlaces || zoom >= minZoomFor(place)) // T stations: names only
-      && !(place.icon === "park" && !isRealPark(place))) : [], [showPlaces, nearby, zoom, alwaysShowPlaces]);
+      && !(place.icon === "park" && !isRealPark(place)) && !overviewPlaceIds.has(place.placeId))
+    : [], [showPlaces, nearby, zoom, alwaysShowPlaces, overviewPlaceIds]);
   useEffect(() => {
     if (!context) return;
     const drawn = placeMarkers.current;
@@ -353,6 +359,31 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     }
   }, [context, visiblePlaces]);
   useEffect(() => () => { for (const marker of placeMarkers.current.values()) marker.setMap(null); }, []);
+
+  useEffect(() => {
+    if (!context) return;
+    const { map, maps } = context;
+    const markers = overviewStops.map(({ stop, walkId }) => {
+      const marker = new maps.Marker({
+        map, position: mapPoint(stop.point), title: stop.name,
+        icon: stopMarkerIcon(maps, stop, null, { popular: true }), zIndex: 28,
+      });
+      const listener = marker.addListener("click", () => {
+        if (stop.placeId && placeClick.current) {
+          placeClick.current(stop.placeId, { name: stop.name, address: stop.address, point: stop.point });
+        } else {
+          walkClick.current?.(walkId);
+        }
+      });
+      return { marker, listener };
+    });
+    return () => {
+      for (const { marker, listener } of markers) {
+        listener.remove();
+        marker.setMap(null);
+      }
+    };
+  }, [context, overviewStops]);
 
   // Google's rules for crowded spots, most prominent place first:
   //  - from zoom 16 a place is its icon and its name together: it shows only if both fit clear of everything already
@@ -510,13 +541,14 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       const clickListener = hit.addListener("click", () => walkClick.current?.(item.id));
       return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id), favorite: favoriteIds?.has(item.id) }), hit, clickListener }];
     }));
+    const popular = popularIds?.has(walk.id);
     const stopLabels = walk.stops.map(stop => textLabel(context, {
       point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)",
     }));
     stops.current = walk.stops.map((stop, index) => {
       const marker = new maps.Marker({
         map, position: mapPoint(stop.point), title: `Stop ${index + 1}: ${stop.name}`,
-        icon: stopMarkerIcon(maps, stop, index + 1), zIndex: 30,
+        icon: stopMarkerIcon(maps, stop, index + 1, { popular }), zIndex: 30,
       });
       marker.addListener("click", () => onSelect(index));
       return marker;
@@ -626,10 +658,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   useEffect(() => {
     if (!context) return;
     stops.current.forEach((marker, index) => {
-      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, { selected: selected === index, done: index < doneStops }));
+      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, {
+        selected: selected === index, done: index < doneStops, popular: popularIds?.has(walk.id),
+      }));
       marker.setZIndex(selected === index ? 31 : 30);
     });
-  }, [context, walk, selected, doneStops]);
+  }, [context, walk, selected, doneStops, popularIds]);
 
   useEffect(() => {
     if (!context || !location) return;
