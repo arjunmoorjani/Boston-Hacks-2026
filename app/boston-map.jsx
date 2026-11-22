@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ROUTE_THEME } from "../lib/map-style.mjs";
+import { POPULAR_ROUTE_HALOS, ROUTE_THEME, placeIconFor, popularMapStops, stopMarker } from "../lib/map-style.mjs";
 import { clamp, fitRoute, MAX_ZOOM, MIN_ZOOM, project, tileLayout, unproject } from "./map-math";
 
 const baseURL = "https://basemaps.cartocdn.com/rastertiles/voyager";
@@ -27,7 +27,17 @@ function Tile({ tile, onLoad, onFail }) {
   />;
 }
 
-export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, location, following, locationStatus }) {
+function PopularPin({ stop, number = null, x, y, selected = false, done = false, onClick }) {
+  const marker = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done, popular: true });
+  return <button type="button" data-map-ui className={`pin popular-pin${selected ? " selected" : ""}`}
+    style={{ left: x, top: y, width: marker.width, height: marker.height, transform: `translate(-${marker.anchor[0]}px, -${marker.anchor[1]}px)` }}
+    onClick={onClick} aria-label={number == null ? stop.name : `Stop ${number}: ${stop.name}`}
+    aria-pressed={number == null ? undefined : selected}>
+    <img src={marker.url} width={marker.width} height={marker.height} alt="" draggable={false}/>
+  </button>;
+}
+
+export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, popularIds, doneStops = 0, location, following, locationStatus }) {
   const element = useRef(null);
   const lastFit = useRef("");
   const browseView = useRef(null);
@@ -49,7 +59,7 @@ export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpe
   }, []);
 
   useEffect(() => {
-    const fitKey = walks.map(item => item.id).join("|");
+    const fitKey = walks.map(item => item.id).sort().join("|");
     const path = walks.flatMap(item => item.path);
     if (size.width && path.length && lastFit.current !== fitKey) {
       lastFit.current = fitKey;
@@ -136,7 +146,13 @@ export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpe
     const [x, y] = project(point, view.zoom);
     return [x - left, y - top];
   };
-  const routes = walks.map(item => item.path.map(screen).map(point => point.join(",")).join(" "));
+  const routes = walks.map(item => ({
+    id: item.id,
+    points: item.path.map(screen).map(point => point.join(",")).join(" "),
+    active: item.id === activeWalkId,
+    popular: Boolean(popularIds?.has(item.id)),
+  })).sort((a, b) => Number(a.active) - Number(b.active) || Number(a.popular) - Number(b.popular));
+  const overviewStops = walk.stops.length ? [] : popularMapStops(walks, popularIds);
   const gps = location && screen(location);
 
   return <section
@@ -155,22 +171,34 @@ export function BostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpe
       {tiles.map(tile => <Tile key={tile.key} tile={tile} onLoad={() => setLoadedTile(true)} onFail={() => setFailedTile(true)} />)}
     </div>
     <svg className="route-layer" width="100%" height="100%" aria-hidden="true">
-      {routes.map((route, index) => {
-        const active = walks[index].id === activeWalkId;
-        return <g key={walks[index].id}>
-          <polyline points={route} fill="none" stroke={ROUTE_THEME.casing} strokeOpacity={active ? 1 : ROUTE_THEME.dimOpacity}
-            strokeWidth={ROUTE_THEME.casingWeight} strokeLinejoin="round" strokeLinecap="round"/>
-          <polyline points={route} fill="none" stroke={ROUTE_THEME.line}
-            strokeOpacity={active ? 1 : ROUTE_THEME.dimOpacity} strokeWidth={ROUTE_THEME.lineWeight} strokeLinejoin="round" strokeLinecap="round"/>
-          <polyline className="route-hit" data-map-ui points={route} fill="none" stroke="transparent" strokeWidth="24"
-            onClick={() => onOpenWalk?.(walks[index].id)}/>
+      {routes.map(({ id, points, active, popular }) => {
+        const boost = popular ? ROUTE_THEME.popularWeightBoost : 0;
+        const casingWeight = ROUTE_THEME.casingWeight + boost;
+        const opacity = active || popular ? 1 : ROUTE_THEME.dimOpacity;
+        return <g key={id}>
+          {popular && POPULAR_ROUTE_HALOS.map(({ extraWeight, opacity }) => <polyline key={extraWeight}
+            points={points} fill="none" stroke={ROUTE_THEME.glow} strokeOpacity={opacity}
+            strokeWidth={casingWeight + extraWeight} strokeLinejoin="round" strokeLinecap="round"/>)}
+          <polyline points={points} fill="none" stroke={ROUTE_THEME.casing} strokeOpacity={opacity}
+            strokeWidth={casingWeight} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline points={points} fill="none" stroke={ROUTE_THEME.line} strokeOpacity={opacity}
+            strokeWidth={ROUTE_THEME.lineWeight + boost} strokeLinejoin="round" strokeLinecap="round"/>
+          <polyline className="route-hit" data-map-ui points={points} fill="none" stroke="transparent" strokeWidth="24"
+            onClick={() => onOpenWalk?.(id)}/>
         </g>;
       })}
     </svg>
     {gps && <span className="gps" style={{ left: gps[0], top: gps[1] }} title="Your location" />}
+    {overviewStops.map(({ key, stop, walkId }) => {
+      const [x, y] = screen(stop.point);
+      if (x < 0 || x > size.width || y < 0 || y > size.height) return null;
+      return <PopularPin key={key} stop={stop} x={x} y={y} onClick={() => onOpenWalk?.(walkId)}/>;
+    })}
     {walk.stops.map((stop, index) => {
       const [x, y] = screen(stop.point);
       if (x < 0 || x > size.width || y < 0 || y > size.height) return null;
+      if (popularIds?.has(walk.id)) return <PopularPin key={stop.id ?? index} stop={stop} number={index + 1} x={x} y={y}
+        selected={selected === index} done={index < doneStops} onClick={() => onSelect(index)}/>;
       return <button data-map-ui className={`pin ${selected === index ? "selected" : ""}`} key={stop.name}
         style={{ left: x, top: y }} onClick={() => onSelect(index)}
         aria-label={`Stop ${index + 1}: ${stop.name}`} aria-pressed={selected === index}>{index + 1}</button>;

@@ -91,6 +91,8 @@ h1 { font-size: clamp(2.4rem, 5.7vw, 4.7rem); font-weight: 800; line-height: 1; 
 .pin { position: absolute; z-index: 3; transform: translate(-50%, -50%); display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 2.5px solid var(--stop-ring); background: var(--stop); color: #fff; border-radius: 50%; font: 500 11px system-ui, sans-serif; }
 .pin::before { content: ""; position: absolute; inset: -6px; }
 .pin.selected { width: 28px; height: 28px; z-index: 4; }
+.pin.popular-pin { border: 0; background: transparent; cursor: pointer; }
+.popular-pin img { display: block; pointer-events: none; }
 .gps { position: absolute; z-index: 3; width: 18px; height: 18px; border-radius: 46% 54% 50% 48%; border: 3px solid #111; background: #269ad5; box-shadow: 0 0 0 5px #fff, 4px 4px 0 #e52b37; transform: translate(-50%, -50%); }
 .map-label, .map-key, .map-notice { position: absolute; border: 1px solid #deded2; border-radius: 99px; background: #fff; }
 .map-label { top: 15px; left: 15px; padding: 8px 12px; font-size: .84rem; pointer-events: none; }

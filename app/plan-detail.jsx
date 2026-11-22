@@ -135,7 +135,7 @@ function ExcursionSummary({ walk, stats }) {
 
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, onDirections,
   onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing, legs = [], travel, onLegMode, onLegSteps, navHidden, onShowNav,
-  favorite = false, onFavorite, onDeleteActivity, deleteLabel = "Delete activity" }) {
+  favorite = false, onFavorite, onDeleteActivity, deleteLabel = "Delete activity", savingCompletion = false, completionError }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
   const label = [theme, walk.area].filter(Boolean).join(" · ");
@@ -176,6 +176,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
         ? <button type="button" className="inline-link" onClick={() => onDirections(stopTarget(walk.stops[step]))}><Icon name="walk" size={14}/>Directions from where you are</button>
         : navHidden && <button type="button" className="inline-link" onClick={onShowNav}><Icon name="straight" size={14}/>Show turn-by-turn</button>}
     </div>}
+    {completionError && <p className="route-warning" role="alert">{completionError}</p>}
     {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
     {rankSlot}
     {routing}
@@ -234,12 +235,12 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
 
     {(walking || !loggedExcursion || !onDeleteActivity) && <div className="plan-bar">
       {walking
-        ? <button type="button" className="plan-secondary" onClick={onEndWalk}>End</button>
+        ? <button type="button" className="plan-secondary" disabled={savingCompletion} onClick={onEndWalk}>End</button>
         : <button type="button" className="plan-secondary" onClick={() => onFork([])}>Modify</button>}
       {!walking && onDeleteActivity
         ? <DeleteActivity label={deleteLabel} onDelete={onDeleteActivity}/>
-        : <button type="button" className="plan-primary" onClick={onAdvance}>
-            {!walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
+        : <button type="button" className="plan-primary" disabled={savingCompletion} onClick={onAdvance}>
+            {savingCompletion ? "Saving…" : !walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
           </button>}
     </div>}
   </div>;
