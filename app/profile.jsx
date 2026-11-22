@@ -12,6 +12,7 @@ import { Inserter } from "../lib/ranking.mjs";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { ROUTE_THEME, WALK_OPEN_STYLE } from "../lib/map-style.mjs";
 import { DEFAULT_PROFILE_AVATARS, isPresetAvatar, presetAvatarPath, validateProfileAvatar } from "../lib/profile-avatar.mjs";
+import { TopoArt } from "./topo-art";
 
 const T_LINE_COLORS = { Red: "#DA291C", Orange: "#ED8B00", Green: "#00843D", Blue: "#003DA5", Silver: "#7C878E" };
 const tLineColor = line => T_LINE_COLORS[line?.split("-")[0]] ?? "#575b53";
@@ -133,31 +134,6 @@ export function ActivityPhotos({ paths, activityId, title }) {
   return <div className={`activity-photos count-${Math.min(state.urls.length, 3)}`}>
     {state.urls.map((url, index) => <img key={url} src={url} alt={`${title} photo ${index + 1}`}/>)}
   </div>;
-}
-
-/** Contour-line art for the cover (drawn once, deterministic). */
-function TopoArt() {
-  const paths = useMemo(() => {
-    const out = [];
-    const rings = (cx, cy, count, seed) => {
-      for (let r = 1; r <= count; r++) {
-        const pts = [];
-        for (let a = 0; a <= 64; a++) {
-          const t = (a / 64) * Math.PI * 2;
-          const wobble = 1 + 0.18 * Math.sin(t * 3 + seed + r * 0.6) + 0.08 * Math.sin(t * 5 - seed * 2 + r);
-          pts.push([cx + Math.cos(t) * r * 34 * wobble * 1.6, cy + Math.sin(t) * r * 34 * wobble]);
-        }
-        out.push(pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("") + "Z");
-      }
-    };
-    rings(230, 150, 9, 0.4);
-    rings(980, 40, 8, 2.1);
-    rings(640, 260, 5, 4.2);
-    return out;
-  }, []);
-  return <svg className="topo" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-    {paths.map((d, i) => <path key={i} d={d} fill="none" stroke={i % 4 === 0 ? "#FFC21A" : "#7FB0EA"} strokeOpacity={i % 4 === 0 ? 0.55 : 0.4} strokeWidth="1.4" strokeDasharray={i % 7 === 3 ? "5 6" : undefined}/>)}
-  </svg>;
 }
 
 function dayLabel(iso) {

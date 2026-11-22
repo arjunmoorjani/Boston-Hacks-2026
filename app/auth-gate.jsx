@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "./icons";
 import { hasStoredProfile } from "../lib/profile-store.mjs";
+import { TopoArt } from "./topo-art";
 
 const guestKey = "sidewalk-guest-mode";
 
@@ -85,7 +86,7 @@ export function AuthGate({ children }) {
     setGuestName(null);
   }
 
-  if (!ready) return <main className="welcome" aria-busy="true"><p role="status">Checking your session…</p></main>;
+  if (!ready) return <main className="welcome" aria-busy="true"><TopoArt full/><p role="status">Checking your session…</p></main>;
 
   if (user || guestConfirmed) {
     return children({ user, client, guestName: user ? null : guestName,
@@ -151,6 +152,7 @@ function Welcome({ client, startupError, onGuest }) {
   }
 
   return <main className="welcome">
+    <TopoArt full/>
     <section className="welcome-card" aria-labelledby="welcome-title">
       <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
       <h1 id="welcome-title">{enteringAsGuest ? "Continue as guest"
