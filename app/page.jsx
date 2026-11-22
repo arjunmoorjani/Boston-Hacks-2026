@@ -15,6 +15,7 @@ import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
 import { ProfilePage, RankPrompt } from "./profile";
 import { LogPage } from "./log-page";
+import { deleteLoggedExcursion } from "../lib/log-excursion.mjs";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { followSteps, legFresh, legKey, legMinutes, legsOf, navSteps, splitPathAtStops, travelTotal } from "../lib/legs.mjs";
@@ -46,6 +47,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const [walks, setWalks] = useState(fallbackWalks);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
   const [selectedWalkId, setSelectedWalkId] = useState(null);
+  const [selectedCompletionId, setSelectedCompletionId] = useState(null);
   const [filters, setFilters] = useState(emptyFilters); // one set of filters for the list and the map
   const [selected, setSelected] = useState(null);
   const [following, setFollowing] = useState(true);
@@ -105,7 +107,23 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const counts = useMemo(() => categoryCounts(listTab === "favorites" ? walks.filter(item => favoriteIds.has(item.id)) : walks, filters),
     [walks, filters, listTab, favoriteIds]);
   const popularIds = useMemo(() => popularWalkIds(walks, profile.completions), [walks, profile.completions]); // these glow on the map
-  const baseWalk = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
+  const baseWalk = useMemo(() => {
+    const stored = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
+    if (!stored || stored.category !== "Logged excursion") return stored;
+    const related = profile.completions.filter(item => item.walkId === stored.id);
+    const activity = related.find(item => item.photoPaths?.length || item.activityId || item.comments
+      || item.priceCategory || Number.isFinite(item.peopleWith)) ?? related[0];
+    if (!activity) return stored;
+    return {
+      ...stored,
+      completedAt: activity.completedAt ?? stored.completedAt,
+      priceCategory: activity.priceCategory ?? stored.priceCategory,
+      peopleWith: Number.isFinite(activity.peopleWith) ? activity.peopleWith : stored.peopleWith,
+      comments: activity.comments ?? stored.comments,
+      photoPaths: activity.photoPaths?.length ? activity.photoPaths : stored.photoPaths,
+      activityId: activity.activityId ?? stored.activityId,
+    };
+  }, [allWalks, selectedWalkId, profile.completions]);
   const walk = baseWalk;
   const stats = walk ? walkStats(walk) : null;
   // While editing, the map shows the draft (straight lines between stops) so reordering is visible right away.
@@ -389,6 +407,12 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       category: "Logged excursion",
       symbol: "route",
       description: comments || "A previous excursion you logged.",
+      completedAt: new Date(`${date}T12:00:00`).toISOString(),
+      priceCategory,
+      peopleWith,
+      comments,
+      photoPaths,
+      activityId,
       legModes,
       stops,
     };
@@ -464,13 +488,42 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     collapseSheet();
   }
 
-  function openWalk(id) {
+  function openWalk(id, expand = false, completionId = null) {
     if (!allWalks.some(item => item.id === id)) return false;
     changeRoute(id);
+    setSelectedCompletionId(completionId);
     setView("detail");
     setShowProfile(false);
-    collapseSheet();
+    if (expand) {
+      sheet.current?.scrollTo({ top: 0 });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.scrollTo({ top: sheetTop(), behavior: "smooth" });
+      }));
+    } else collapseSheet();
     return true;
+  }
+
+  async function deleteSelectedActivity() {
+    const activity = profile.completions.find(item => item.id === selectedCompletionId);
+    if (!activity || !walk) throw new Error("This activity could not be found.");
+    const logged = walk.category === "Logged excursion";
+    if (logged && walk.activityId) {
+      await deleteLoggedExcursion({ activityId: walk.activityId, photoPaths: walk.photoPaths ?? [] });
+    }
+    updateProfile(old => logged ? {
+      completions: old.completions.filter(item => item.walkId !== walk.id),
+      customWalks: old.customWalks.filter(item => item.id !== walk.id),
+      ranking: old.ranking.filter(id => id !== walk.id),
+      favorites: (old.favorites ?? []).filter(id => id !== walk.id),
+    } : {
+      completions: old.completions.filter(item => item.id !== activity.id),
+      ranking: old.completions.filter(item => item.id !== activity.id).some(item => item.walkId === walk.id)
+        ? old.ranking : old.ranking.filter(id => id !== walk.id),
+    });
+    setSelectedCompletionId(null);
+    changeRoute(null);
+    setView("list");
+    collapseSheet();
   }
 
   function deleteCustomWalk(id) {
@@ -675,6 +728,8 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
             legs={legRows} travel={travel} onLegMode={setLegMode}
             onLegSteps={index => legs[index] && ensureLeg(legs[index].from, legs[index].to, modeOf(index))}
             navHidden={navHidden && Boolean(navLeg)} onShowNav={() => { setNavHidden(false); collapseSheet(); }}
+            onDeleteActivity={selectedCompletionId ? deleteSelectedActivity : null}
+            deleteLabel={walk.category === "Logged excursion" ? "Delete excursion" : "Delete activity"}
             routing={<>
                 {planNotice && <p className="plan-notice" role="status"><Icon name="check" size={16}/>{planNotice}</p>}
                 {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
@@ -687,8 +742,13 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
                         aria-pressed={toStartMode === mode} onClick={() => setToStartMode(mode)}>{label}</button>)}
                     </div>
                   </div>
-                  <button className="catalog-button directions-start" type="button" disabled={!googleMapsConfigured}
-                    onClick={() => openDirections({ name: walk.stops[0].name, point: walk.stops[0].point, placeId: walk.stops[0].placeId }, toStartMode)}>
+                  <button className="catalog-button directions-start" type="button" disabled={!selectedCompletionId && !googleMapsConfigured}
+                    onClick={() => {
+                      if (selectedCompletionId) {
+                        advance();
+                        collapseSheet();
+                      } else openDirections({ name: walk.stops[0].name, point: walk.stops[0].point, placeId: walk.stops[0].placeId }, toStartMode);
+                    }}>
                     <Icon name={TRAVEL_MODES.find(([mode]) => mode === toStartMode)?.[2] ?? "walk"} size={16}/>Directions to {walk.stops[0].name}
                   </button>
                 </section>}
@@ -716,7 +776,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       onRename={renameProfile} nameLoading={nameLoading} nameError={nameError}
       onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
       onRank={ranking => updateProfile({ ranking })}
-      onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
+      onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
     <div hidden={!showLog}><LogPage visible={showLog} onLog={logPreviousExcursion}/></div>
     <nav className="bottom-nav" aria-label="Primary navigation">
