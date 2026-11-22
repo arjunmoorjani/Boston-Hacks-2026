@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MetroIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { MetroIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, POPULAR_ROUTE_HALOS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, popularMapStops, stopMarker } from "../lib/map-style.mjs";
-import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
+import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, POPULAR_ROUTE_HALOS, ROUTE_THEME, WALK_OPEN_STYLE, destinationPin, placeIconFor, popularMapStops, stopMarker } from "../lib/map-style.mjs";
+import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, colorFor, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
 import { CITIES, FEATURES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
 import { Icon } from "./icons";
+import { fetchPlacePhotos, fetchPlaceType } from "../lib/place-profile.mjs";
 
 // Most places and park names on screen at once, at zoom 15 / 16 / 17+, whatever the screen size (a phone's screen
 // size usually allows fewer: about 10 / 15 / 24 places and 4 / 5 / 9 park names).
@@ -183,6 +184,64 @@ function placeMarker(context, place, onClick) {
 
 // A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
 // bigger when selected, blue with a check once you've done it.
+// Where you are: Google's blue dot (Google blue with a white ring), as in Google Maps. The Maps JS API has no
+// built-in one, so it's drawn the same way.
+function locationDot({ map, maps }, point) {
+  return new maps.Marker({
+    map, position: mapPoint(point), title: "Your location", zIndex: 40, clickable: false,
+    icon: { path: maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#4285F4", fillOpacity: 1, strokeColor: "#FFFFFF", strokeWeight: 3 },
+  });
+}
+
+// A single place you're heading to: a pin in its category's color with its icon (lib/map-style.mjs destinationPin).
+// Uses the place's Google type when known; otherwise guesses from its name, then looks the type up by place id.
+function placePin({ map, maps }, { point, name, placeId, primaryType, reached = false }) {
+  const iconFor = type => {
+    const icon = placeIconFor(type, name);
+    const { url, width, height, anchor } = destinationPin(icon, colorFor(icon), { reached });
+    return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
+  };
+  const marker = new maps.Marker({ map, position: mapPoint(point), title: name, zIndex: 41, clickable: false, icon: iconFor(primaryType) });
+  if (!primaryType && placeId) {
+    fetchPlaceType(placeId).then(type => { if (type && marker.getMap()) marker.setIcon(iconFor(type)); }).catch(() => {});
+  }
+  return marker;
+}
+
+// Zoomed in, the stops of routes that anyone has completed show a little card of photos.
+const PHOTO_ZOOM = 16; // one level out from 17 shows twice the area
+const PHOTO_MIN_USERS = 1;
+
+// A card above a popular stop's marker: its 2 photos side by side, its name and the photographers' names (Google
+// requires the credit). Tapping it opens the place. Hidden if the place has no photos.
+function photoCard(context, stop, onClick) {
+  const card = document.createElement("div");
+  card.className = "map-photo-card loading";
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `Photos of ${stop.name}`);
+  const row = document.createElement("div");
+  row.className = "map-photo-row";
+  const name = document.createElement("span");
+  name.className = "map-photo-name";
+  name.textContent = stop.name;
+  const credit = document.createElement("span");
+  credit.className = "map-photo-credit";
+  card.append(row, name, credit);
+  const marker = addHtmlMarker(context, { point: stop.point, label: stop.name, content: card, onClick, zIndex: 45, transform: "translate(-50%, calc(-100% - 20px))" });
+  fetchPlacePhotos(stop.placeId, 2, 240).then(photos => {
+    if (!photos.length) { card.hidden = true; return; }
+    for (const photo of photos) {
+      const img = document.createElement("img");
+      img.src = photo.src; // no referrerPolicy: Google checks the referrer against the key's website restrictions
+      img.alt = "";
+      row.append(img);
+    }
+    credit.textContent = [...new Set(photos.map(photo => photo.author))].join(", ");
+    card.classList.remove("loading");
+  }).catch(() => { card.hidden = true; });
+  return marker;
+}
+
 function stopMarkerIcon(maps, stop, number, options) {
   const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), ...options });
   return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
@@ -212,7 +271,7 @@ function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, onLocate, locationStatus, onPlaceClick, onMapClick, directions, userLocationIcon = false, showTransitToggle = true, alwaysShowPlaces = false }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, onLocate, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -294,6 +353,20 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const overviewStops = useMemo(() => focused || walk.stops.length ? [] : popularMapStops(walks, popularIds),
     [focused, walk.stops.length, walks, popularIds]);
   const overviewPlaceIds = useMemo(() => new Set(overviewStops.map(({ stop }) => stop.placeId)), [overviewStops]);
+  // Stops that can get a photo card while browsing: every stop with a Google place on any route that at least one person
+  // have completed (not only the few highlighted as popular), once per place.
+  const photoStops = useMemo(() => {
+    if (focused || walk.stops.length) return [];
+    const seen = new Map();
+    for (const item of walks) {
+      if ((item.completedUsers ?? 0) < PHOTO_MIN_USERS) continue;
+      for (const stop of item.stops ?? []) {
+        if (stop.placeId && stop.point && !seen.has(stop.placeId)) seen.set(stop.placeId, { stop, walkId: item.id });
+      }
+    }
+    return [...seen.values()];
+  }, [focused, walk.stops.length, walks]);
+  const closeUp = zoom >= PHOTO_ZOOM;
   const showPlaces = !focused && !nearbyFailed && (alwaysShowPlaces || zoom >= PLACES_MIN_ZOOM);
   // From zoom 15 (where our place data loads) park and T names are ours, on top of everything; Google's are off.
   const ourTopNames = !nearbyFailed && !parkNamesFailed && zoom >= PLACES_MIN_ZOOM;
@@ -340,8 +413,10 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const topNames = useMemo(() => {
     if (!ourTopNames) return [];
     const stopIds = new Set(walk.stops.map(stop => stop.placeId).filter(Boolean));
+    // a popular park with a photo card already has its name on the card
+    if (closeUp) for (const { stop } of photoStops) stopIds.add(stop.placeId);
     return parkAndTNames(nearby, zoom).filter(place => !stopIds.has(place.placeId));
-  }, [ourTopNames, nearby, walk, zoom]);
+  }, [ourTopNames, nearby, walk, zoom, closeUp, photoStops]);
   const topLabels = useRef([]);
   const topShown = useRef(new Set()); // park names on screen after the last check: they keep their spot as you zoom
   useEffect(() => {
@@ -405,6 +480,28 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     };
   }, [context, overviewStops]);
 
+  // Zoomed in close: a photo card on every popular stop on screen, updated as you pan.
+  useEffect(() => {
+    if (!context || !closeUp || !photoStops.length) return;
+    const { map } = context;
+    const cards = new Map(); // placeId -> marker
+    const update = () => {
+      const bounds = map.getBounds();
+      if (!bounds) return;
+      const onScreen = photoStops.filter(({ stop }) => bounds.contains(mapPoint(stop.point)));
+      const keep = new Set(onScreen.map(({ stop }) => stop.placeId));
+      for (const [placeId, marker] of cards) if (!keep.has(placeId)) { marker.setMap(null); cards.delete(placeId); }
+      for (const { stop } of onScreen) {
+        if (cards.has(stop.placeId)) continue;
+        cards.set(stop.placeId, photoCard(context, stop,
+          () => placeClick.current?.(stop.placeId, { name: stop.name, address: stop.address, point: stop.point })));
+      }
+    };
+    const idle = map.addListener("idle", update);
+    update();
+    return () => { idle.remove(); for (const marker of cards.values()) marker.setMap(null); };
+  }, [context, closeUp, photoStops]);
+
   // Google's rules for crowded spots, most prominent place first:
   //  - from zoom 16 a place is its icon and its name together: it shows only if both fit clear of everything already
   //    shown (places, park and T names); otherwise the whole place waits for a closer zoom
@@ -430,9 +527,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       // then real parks before plazas and playgrounds, then nearest the center. Everything else keeps clear of them.
       const tier = zoom >= 17 ? 2 : zoom >= LABEL_ZOOM ? 1 : 0; // zoom 15 / 16 / 17+
       const parkRoom = Math.min(MAX_PARK_NAMES[tier], Math.max(3, Math.round(area / [60000, 40000, 25000][tier])));
-      // The open walk's own stop names (and a route's "4 min" label) come first: park and T names, and place icons,
-      // make way for them.
-      const ours = [...container.current.querySelectorAll(".stop-label, .dir-route-duration")]
+      // The open walk's own stop names (and a route's "4 min" label, and photo cards on popular stops) come first:
+      // park and T names, and place icons, make way for them.
+      const ours = [...container.current.querySelectorAll(".stop-label, .dir-route-duration, .map-photo-card:not([hidden])")]
         .map(element => element.getBoundingClientRect()).filter(box => box.width);
       fixed.push(...ours);
       const measured = topLabels.current.map(label => {
@@ -632,12 +729,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const overlays = directions.approachPath?.length ? [] : drawSegments(context, directions.segments);
     const markers = [];
     if (directions.origin) {
-      markers.push(addHtmlMarker(context, { point: directions.origin, label: "Your location", className: "google-location", zIndex: 40 }));
+      markers.push(locationDot(context, directions.origin));
     }
     for (const leg of legs) {
-      markers.push(addHtmlMarker(context, {
-        point: leg.destination, label: leg.destinationName,
-        className: leg.completed ? "dir-dest-pin dir-dest-reached" : "dir-dest-pin", zIndex: 41,
+      markers.push(placePin(context, {
+        point: leg.destination, name: leg.destinationName, placeId: leg.destinationPlaceId ?? directions.destinationPlaceId,
+        primaryType: leg.destinationType ?? directions.destinationType, reached: leg.completed,
       }));
       const { path } = leg;
       if (path.length < 2) continue;
@@ -669,7 +766,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // A place picked from the search bar: a pin where it is.
   useEffect(() => {
     if (!context || !highlight?.point) return;
-    const pin = addHtmlMarker(context, { point: highlight.point, label: highlight.name, className: "dir-dest-pin", zIndex: 41 });
+    const pin = placePin(context, { point: highlight.point, name: highlight.name, placeId: highlight.placeId, primaryType: highlight.primaryType });
     return () => pin.setMap(null);
   }, [context, highlight]);
 
@@ -713,25 +810,10 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   useEffect(() => {
     if (!context || !location) return;
-    const content = userLocationIcon ? document.createElement("span") : null;
-    if (content) {
-      content.className = "google-location-user";
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("aria-hidden", "true");
-      for (const [tag, attributes] of UserIcon) {
-        const element = document.createElementNS(svg.namespaceURI, tag);
-        for (const [key, value] of Object.entries(attributes)) {
-          if (key !== "key") element.setAttribute(key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`), value);
-        }
-        svg.append(element);
-      }
-      content.append(svg);
-    }
-    const dot = addHtmlMarker(context, { point: location, label: "Your location", className: "google-location", content, zIndex: 40 });
+    const dot = locationDot(context, location);
     if (following) context.map.panTo(mapPoint(location));
     return () => dot.setMap(null);
-  }, [context, location, following, userLocationIcon]);
+  }, [context, location, following]);
 
   // Which of our labels show at this zoom (see .zoom-* rules in app/styles.css).
   const level = areaLevel(zoom);

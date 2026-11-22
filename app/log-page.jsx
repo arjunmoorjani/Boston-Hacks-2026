@@ -344,6 +344,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
       return {
         destination: stop.point,
         destinationName: stop.label,
+        destinationPlaceId: stop.placeId ?? null,
         path: excursionLeg(legTrip, origin, stop.point).path,
         completed: index < arrivedCount,
         duration: legTrip ? minutesLabel(legTrip.minutes) : null,
@@ -446,7 +447,7 @@ function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
         {destination && <p>{TRAVEL_MODES.find(([value]) => value === mode)?.[1]}{trip && ` · ${minutesLabel(trip.minutes)} expected`}</p>}
         <div className="log-start-map" ref={routeMap}>
           {visible && <GoogleBostonMap walk={EMPTY_WALK} walks={NO_WALKS} selected={null} onSelect={noop}
-            directions={directions} location={location} userLocationIcon showTransitToggle={false}/>}
+            directions={directions} location={location} showTransitToggle={false}/>}
         </div>
         {(locationStatus || tripStatus) && <p className="log-map-status" role="status">{locationStatus || tripStatus}</p>}
       </div>

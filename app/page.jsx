@@ -246,7 +246,8 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   }
   const destination = walk ? walk.stops[step ?? selected ?? 0] : null;
   const directionsMap = useMemo(() => view === "directions" && dirTarget ? {
-    destination: dirTarget.point, destinationName: dirTarget.name, origin: dirOrigin,
+    destination: dirTarget.point, destinationName: dirTarget.name, destinationPlaceId: dirTarget.placeId ?? null,
+    destinationType: dirTarget.primaryType ?? null, origin: dirOrigin,
     segments: dirState.status === "ready" ? dirState.result.segments : [], focus: dirFocus,
   } : null, [view, dirTarget, dirOrigin, dirState, dirFocus]);
 

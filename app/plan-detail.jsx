@@ -65,7 +65,7 @@ function LegRow({ leg, current, onMode, onSteps }) {
   </li>;
 }
 
-const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
+const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null, primaryType: stop.primaryType ?? null });
 
 function DeleteActivity({ label, onDelete }) {
   const [confirming, setConfirming] = useState(false);
