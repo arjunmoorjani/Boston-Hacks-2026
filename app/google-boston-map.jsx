@@ -9,6 +9,9 @@ import { LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, minZoomFor, placesForView } fr
 import { CITIES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
 
+// Routes and transit lines top out at 24. Keep every name in one protected layer above them.
+const MAP_LABEL_Z_INDEX = 60;
+
 function lineScale(zoom = 14) {
   const normalized = Math.max(0, Math.min(1, (zoom - 10) / 5));
   return normalized ** 2;
@@ -120,7 +123,7 @@ function addHtmlMarker({ map, HtmlMarker }, options) {
 }
 
 // Text on the map in the app's font (city and neighborhood names, stop names).
-function textLabel(context, { point, text, className, transform, zIndex = 2 }) {
+function textLabel(context, { point, text, className, transform, zIndex = MAP_LABEL_Z_INDEX }) {
   const span = document.createElement("span");
   span.className = `map-text ${className}`;
   span.textContent = text;
@@ -142,7 +145,13 @@ function placeMarker(context, place, onClick) {
   name.className = "poi-name";
   name.textContent = place.name;
   button.append(dot, name);
-  return addHtmlMarker(context, { point: place.point, content: button, onClick, transform: "translate(-11px,-50%)", zIndex: 6 });
+  return addHtmlMarker(context, {
+    point: place.point,
+    content: button,
+    onClick,
+    transform: "translate(-11px,-50%)",
+    zIndex: MAP_LABEL_Z_INDEX,
+  });
 }
 
 // A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
@@ -396,7 +405,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id) }), hit, clickListener }];
     }));
     const stopLabels = walk.stops.map(stop => textLabel(context, {
-      point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)", zIndex: 3,
+      point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)",
     }));
     stops.current = walk.stops.map((stop, index) => {
       const marker = new maps.Marker({
