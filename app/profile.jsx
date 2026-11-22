@@ -41,6 +41,29 @@ function RouteThumb({ path }) {
   </svg>;
 }
 
+function ActivityPhotos({ paths, title }) {
+  const [state, setState] = useState({ loading: Boolean(paths?.length), urls: [], error: "" });
+
+  useEffect(() => {
+    if (!paths?.length) return;
+    let stale = false;
+    import("../lib/supabase.mjs").then(async ({ supabase }) => {
+      const { data, error } = await supabase.storage.from("activity-photos").createSignedUrls(paths, 60 * 60);
+      if (stale) return;
+      if (error) setState({ loading: false, urls: [], error: "Photos couldn’t be loaded." });
+      else setState({ loading: false, urls: (data ?? []).map(item => item.signedUrl).filter(Boolean), error: "" });
+    }).catch(() => { if (!stale) setState({ loading: false, urls: [], error: "Photos couldn’t be loaded." }); });
+    return () => { stale = true; };
+  }, [paths]);
+
+  if (!paths?.length) return null;
+  if (state.loading) return <p className="activity-photo-status" role="status">Loading {paths.length} {paths.length === 1 ? "photo" : "photos"}…</p>;
+  if (state.error) return <p className="activity-photo-status error">{state.error}</p>;
+  return <div className={`activity-photos count-${Math.min(state.urls.length, 3)}`}>
+    {state.urls.map((url, index) => <img key={url} src={url} alt={`${title} photo ${index + 1}`}/>)}
+  </div>;
+}
+
 /** Contour-line art for the cover (drawn once, deterministic). */
 function TopoArt() {
   const paths = useMemo(() => {
@@ -245,6 +268,12 @@ export function ProfilePage({ profile, walks, onClose, onRename, onRank, onOpenW
                     <div><span>Stops</span><strong>{c.stops}</strong></div>
                     <div><span>Time</span><strong>{timeLabel(c.minutes)}</strong></div>
                   </div>
+                  {(c.priceCategory || Number.isFinite(c.peopleWith)) && <div className="activity-details">
+                    {c.priceCategory && <span>{c.priceCategory === "FREE" ? "Free" : c.priceCategory}</span>}
+                    {Number.isFinite(c.peopleWith) && <span>{c.peopleWith === 0 ? "Solo" : `With ${c.peopleWith} ${c.peopleWith === 1 ? "person" : "people"}`}</span>}
+                  </div>}
+                  {c.comments && <p className="activity-comments">{c.comments}</p>}
+                  <ActivityPhotos paths={c.photoPaths} title={c.title}/>
                   <button type="button" className="activity-map" onClick={() => onOpenWalk(c.walkId)} aria-label={`Open ${c.title} on the map`}>
                     <RouteThumb path={c.path}/>
                   </button>

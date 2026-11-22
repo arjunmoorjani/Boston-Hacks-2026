@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MetroIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
 import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
-import { LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, minZoomFor, placesForView } from "../lib/nearby-places.mjs";
+import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, minZoomFor, placesForView } from "../lib/nearby-places.mjs";
 import { CITIES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
 
@@ -182,7 +182,7 @@ function drawRoute(maps, map, path, { active, draft, popular }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, highlight, location, following, locationStatus, onPlaceClick, directions }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -195,6 +195,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const [mapError, setMapError] = useState("");
   const placeClick = useRef(onPlaceClick);
   placeClick.current = onPlaceClick; // the map listener is set up once; always call the latest handler
+  const mapClick = useRef(onMapClick);
+  mapClick.current = onMapClick;
   const walkClick = useRef(onOpenWalk);
   walkClick.current = onOpenWalk;
 
@@ -215,9 +217,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       });
       // Tapping a place icon on the map opens its profile (app/place-profile.jsx) instead of Google's popup.
       poiClickListener = map.addListener("click", event => {
-        if (!("placeId" in event) || !event.placeId) return;
-        event.stop();
-        placeClick.current?.(event.placeId, { point: event.latLng ? [event.latLng.lat(), event.latLng.lng()] : null });
+        if (("placeId" in event) && event.placeId) {
+          event.stop();
+          placeClick.current?.(event.placeId, { point: event.latLng ? [event.latLng.lat(), event.latLng.lng()] : null });
+          return;
+        }
+        if (event.latLng) mapClick.current?.([event.latLng.lat(), event.latLng.lng()]);
       });
       zoomListener = map.addListener("zoom_changed", () => setZoom(map.getZoom()));
       setContext({ map, maps, HtmlMarker: htmlMarkerClass(maps) });
@@ -255,7 +260,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // Exploring: our own place markers instead of Google's icons (or Google's if ours can't load). A walk is open, or a
   // place is selected (its card is open): no place icons at all, so only the walk's stops or that place show.
   const focused = Boolean(activeWalkId) || Boolean(highlight?.point);
-  const showPlaces = !focused && !nearbyFailed && zoom >= PLACES_MIN_ZOOM;
+  const showPlaces = !focused && !nearbyFailed && (alwaysShowPlaces || zoom >= PLACES_MIN_ZOOM);
   useEffect(() => {
     if (!context) return;
     context.map.setOptions({
@@ -270,10 +275,18 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const { map } = context;
     let stale = false;
     const load = () => {
-      if (map.getZoom() < PLACES_MIN_ZOOM) return;
+      if (!alwaysShowPlaces && map.getZoom() < PLACES_MIN_ZOOM) return;
       const bounds = map.getBounds(), center = map.getCenter();
       if (!bounds || !center) return;
-      const { north, south, east, west } = bounds.toJSON();
+      const visible = bounds.toJSON();
+      // Logger maps keep place icons at every zoom. Search only a few cells around the center so zooming far out
+      // cannot accidentally request thousands of Nearby Search grid cells.
+      const { north, south, east, west } = alwaysShowPlaces ? {
+        north: center.lat() + CELL_DEG * 1.5,
+        south: center.lat() - CELL_DEG * 1.5,
+        east: center.lng() + CELL_DEG * 1.5,
+        west: center.lng() - CELL_DEG * 1.5,
+      } : visible;
       placesForView({ north, south, east, west }, [center.lat(), center.lng()]).then(({ places, failed }) => {
         if (stale) return;
         if (failed && !places.length) setNearbyFailed(true);
@@ -283,12 +296,14 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const idle = map.addListener("idle", load);
     load();
     return () => { stale = true; idle.remove(); };
-  }, [context, focused, nearbyFailed]);
+  }, [context, focused, nearbyFailed, alwaysShowPlaces]);
 
   // Draw our place markers that this zoom has reached (lib/nearby-places.mjs: prominent places show farther out),
   // adding and removing only what changed. `nearby` is in prominence order.
   const placeMarkers = useRef(new Map());
-  const visiblePlaces = useMemo(() => showPlaces ? nearby.filter(place => zoom >= minZoomFor(place)) : [], [showPlaces, nearby, zoom]);
+  const visiblePlaces = useMemo(() => showPlaces
+    ? nearby.filter(place => alwaysShowPlaces || zoom >= minZoomFor(place))
+    : [], [showPlaces, nearby, zoom, alwaysShowPlaces]);
   useEffect(() => {
     if (!context) return;
     const drawn = placeMarkers.current;
@@ -316,7 +331,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         if (!button) continue;
         button.classList.remove("poi-hidden");
         const dot = button.querySelector(".poi-dot").getBoundingClientRect();
-        if (dots.some(other => overlaps(dot, other, 2))) button.classList.add("poi-hidden");
+        if (!alwaysShowPlaces && dots.some(other => overlaps(dot, other, 2))) button.classList.add("poi-hidden");
         else { dots.push(dot); shown.push(button); }
       }
       if (zoom < LABEL_ZOOM) return;
@@ -333,7 +348,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     const frame = requestAnimationFrame(declutter);
     const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
     return () => { cancelAnimationFrame(frame); idle.remove(); };
-  }, [context, visiblePlaces, zoom]);
+  }, [context, visiblePlaces, zoom, alwaysShowPlaces]);
 
   // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
   useEffect(() => {
@@ -499,12 +514,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   return <section className={`map google-map ${zoomClasses}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
-    <button className="transit-toggle catalog-button" type="button" disabled={!context}
+    {showTransitToggle && <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       title={transit ? "Hide T lines" : "Show T lines"}
       onClick={() => setTransit(value => !value)}>
       <HugeiconsIcon icon={MetroIcon} aria-hidden="true" />
-    </button>
+    </button>}
     {(mapError || !context || locationStatus) && <div className="map-notice" role="status">{mapError || locationStatus || "Loading Google Maps…"}</div>}
   </section>;
 }

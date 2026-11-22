@@ -13,6 +13,7 @@ import { DirectionsPanel, TRAVEL_MODES } from "./directions-panel";
 import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
 import { ProfilePage, RankPrompt } from "./profile";
+import { LogPage } from "./log-page";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { followSteps, legFresh, legKey, legMinutes, legsOf, navSteps, splitPathAtStops, travelTotal } from "../lib/legs.mjs";
@@ -49,6 +50,7 @@ export default function Home() {
   const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showLog, setShowLog] = useState(false);
   const [draftPlaces, setDraftPlaces] = useState([]);
   const [savingOuting, setSavingOuting] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(null);
@@ -314,9 +316,55 @@ export default function Home() {
 
   function openMapScreen() {
     setShowProfile(false);
+    setShowLog(false);
     setView("list");
     changeRoute(null);
     collapseSheet();
+  }
+
+  function logPreviousExcursion({ name, locations, legModes = [], route, date, priceCategory = "FREE", peopleWith = 0, comments, photoPaths = [], activityId = null }) {
+    const walkId = `logged:${crypto.randomUUID()}`;
+    const stops = locations.map((location, index) => ({
+      id: location.placeId ? `google:${location.placeId}` : `${walkId}:${index}`,
+      placeId: location.placeId,
+      name: location.label,
+      address: location.address,
+      point: location.point,
+      note: index === 0 ? "Excursion starting point." : "A stop on this excursion.",
+    }));
+    const walk = {
+      ...route,
+      id: walkId,
+      title: name,
+      area: "Your excursion",
+      category: "Logged excursion",
+      symbol: "route",
+      description: comments || "A previous excursion you logged.",
+      legModes,
+      stops,
+    };
+    const completion = {
+      id: crypto.randomUUID(),
+      walkId,
+      title: name,
+      area: "Your excursion",
+      category: "Logged excursion",
+      tLines: [],
+      path: route.path,
+      stops: stops.length,
+      miles: Number((route.meters / 1609.344).toFixed(1)),
+      minutes: Math.max(1, Math.round(route.minutes)),
+      completedAt: new Date(`${date}T12:00:00`).toISOString(),
+      priceCategory,
+      peopleWith,
+      comments,
+      photoPaths,
+      activityId,
+    };
+    updateProfile(old => ({
+      customWalks: [...old.customWalks, walk],
+      completions: [completion, ...old.completions],
+    }));
   }
 
   // ---------- in-app directions ----------
@@ -617,14 +665,16 @@ export default function Home() {
       onRename={name => updateProfile({ name })} onRank={ranking => updateProfile({ ranking })}
       onOpenWalk={openWalk} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
+    {showLog && <LogPage onLog={logPreviousExcursion}/>}
     <nav className="bottom-nav" aria-label="Primary navigation">
-      <button type="button" className="bottom-nav-button" aria-label="Map" aria-current={!showProfile ? "page" : undefined}
+      <button type="button" className="bottom-nav-button" aria-label="Map" aria-current={!showProfile && !showLog ? "page" : undefined}
         onClick={openMapScreen}>
         <HugeiconsIcon icon={MapIcon} size={24}/>
       </button>
-      <button type="button" className="bottom-nav-log" aria-label="Log, coming soon" title="Log coming soon" disabled/>
+      <button type="button" className="bottom-nav-log" aria-label="Log" aria-current={showLog ? "page" : undefined}
+        onClick={() => { setShowProfile(false); setShowLog(true); }}/>
       <button type="button" className="bottom-nav-button" aria-label="Profile" aria-current={showProfile ? "page" : undefined}
-        onClick={() => setShowProfile(true)}>
+        onClick={() => { setShowLog(false); setShowProfile(true); }}>
         <HugeiconsIcon icon={UserIcon} size={24}/>
       </button>
     </nav>
