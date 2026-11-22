@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadGoogleMaps } from "../lib/google-maps.mjs";
-import { fetchDirections } from "../lib/directions.mjs";
+import { fetchDirections, minutesLabel } from "../lib/directions.mjs";
+import { getLocationOnce, watchUserLocation } from "../lib/location.mjs";
 import { endPlaceSearchSession, googlePlaceSuggestions, MIN_GOOGLE_CHARS } from "../lib/place-search.mjs";
 import { fetchPlaceProfile } from "../lib/place-profile.mjs";
 import { GoogleBostonMap } from "./google-boston-map";
@@ -11,6 +12,9 @@ import { Icon } from "./icons";
 import { loggedExcursionDatabaseReady, saveLoggedExcursion } from "../lib/log-excursion.mjs";
 
 const BUILDER_ROUTE_IDS = new Set(["log-builder"]);
+const EMPTY_ROUTE = { status: "idle", path: [] };
+const EMPTY_WALK = { id: "active-excursion", stops: [], path: [] };
+const NO_WALKS = [];
 const noop = () => {};
 const todayValue = () => {
   const date = new Date();
@@ -122,6 +126,157 @@ function RouteBuilderMap({ locationNumber, locations, route, onPick }) {
     </div>
     <p className={`log-map-status${route.status === "error" ? " error" : ""}`} role="status">{status}</p>
   </>;
+}
+
+function travelPrice(mode, fare) {
+  if (mode === "WALKING" || mode === "BICYCLING") return 0;
+  const dollars = /^(?:US)?\$\s*(\d+(?:\.\d{1,2})?)$/i.exec(fare?.trim() ?? "");
+  return dollars ? Number(dollars[1]) : null;
+}
+
+function suggestedMode(quotes) {
+  const knownPrices = quotes.filter(quote => quote.price !== null);
+  const ranked = knownPrices.length ? knownPrices : quotes;
+  // Trade up to five extra minutes for each dollar saved.
+  return [...ranked].sort((a, b) =>
+    (a.minutes + (a.price ?? 0) * 5) - (b.minutes + (b.price ?? 0) * 5))[0]?.mode;
+}
+
+function NewExcursionForm({ onBack, onBegin, initialDraft }) {
+  const [name, setName] = useState(initialDraft?.name ?? "");
+  const [firstStop, setFirstStop] = useState(initialDraft?.firstStop ?? { label: "", address: "", point: null, placeId: null });
+  const [mode, setMode] = useState(initialDraft?.mode ?? "WALKING");
+  const [comparison, setComparison] = useState(null);
+  const destination = firstStop.point;
+  const current = comparison?.destination === destination ? comparison : null;
+
+  useEffect(() => {
+    if (!destination) return;
+    let active = true;
+    async function compareModes() {
+      try {
+        const origin = await getLocationOnce();
+        if (!active) return;
+        const results = await Promise.allSettled(TRAVEL_MODES.map(async ([mode]) => {
+          const route = await fetchDirections(origin, destination, mode);
+          return { ...route, mode, price: travelPrice(mode, route.fare) };
+        }));
+        if (!active) return;
+        const quotes = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+        setComparison({ destination, origin, quotes, error: quotes.length ? "" : "Travel estimates are unavailable." });
+      } catch (error) {
+        if (active) setComparison({ destination, quotes: [], error: error.message });
+      }
+    }
+    compareModes();
+    return () => { active = false; };
+  }, [destination]);
+
+  const recommended = suggestedMode(current?.quotes ?? []);
+
+  return <section className="log-form-page" aria-labelledby="new-excursion-title">
+    <button type="button" className="log-form-back" onClick={onBack} aria-label="Back to excursion options">← Back</button>
+    <div className="log-form-content">
+      <div className="log-form-section">
+        <label id="new-excursion-title" htmlFor="new-excursion-name">Name your excursion</label>
+        <input id="new-excursion-name" type="text" value={name} onChange={event => setName(event.target.value)}
+          placeholder="Example: Saturday in the North End" autoComplete="off"/>
+      </div>
+      <div className="log-form-section log-location-section">
+        <label htmlFor="new-excursion-first-stop">Where to first?</label>
+        <PlaceField fieldId="new-excursion-first-stop" location={firstStop} number={1} onChange={setFirstStop}/>
+        <p className="log-map-prompt">Or pick location 1 on the map</p>
+        <RouteBuilderMap locationNumber={1} locations={[firstStop]} route={EMPTY_ROUTE} onPick={setFirstStop}/>
+      </div>
+      <div className="log-transport-choice">
+        <span>How do you intend to get there?</span>
+        <div className="travel-modes" role="group" aria-label="How do you intend to get there?">
+          {TRAVEL_MODES.map(([value, label, icon]) => {
+            const quote = current?.quotes.find(item => item.mode === value);
+            return <button key={value} type="button" aria-pressed={mode === value}
+              onClick={() => setMode(value)}>
+              <Icon name={icon} size={15}/>{label}
+              {value === recommended && <span className="excursion-recommended" aria-label="Recommended" title="Recommended"/>}
+              {quote && <small>{minutesLabel(quote.minutes)} · {quote.price === 0 ? "Free" : quote.fare || "Price unknown"}</small>}
+            </button>;
+          })}
+        </div>
+        {destination && !current && <p className="log-map-status" role="status">Comparing travel times and prices…</p>}
+        {current?.error && <p className="log-map-status error" role="status">{current.error}</p>}
+      </div>
+      <button type="button" className="log-finish" disabled={!name.trim() || !firstStop.point}
+        onClick={() => onBegin({ name: name.trim(), firstStop, mode, origin: current?.origin,
+          route: current?.quotes.find(quote => quote.mode === mode) })}>Begin</button>
+    </div>
+  </section>;
+}
+
+function ActiveExcursion({ excursion, onBack }) {
+  const { firstStop, mode } = excursion;
+  const [location, setLocation] = useState(excursion.origin ?? null);
+  const [locationStatus, setLocationStatus] = useState("");
+  const [trip, setTrip] = useState(excursion.route ?? null);
+  const [tripStatus, setTripStatus] = useState("");
+  const [routeStart, setRouteStart] = useState(excursion.route ? null : excursion.origin ?? null);
+  const lastOrigin = useRef(excursion.origin ?? null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus("Your location is unavailable in this browser.");
+      return;
+    }
+    return watchUserLocation(navigator.geolocation, {
+      onLocation: point => {
+        setLocation(point);
+        setLocationStatus("");
+        const last = lastOrigin.current;
+        if (!last || Math.hypot(point[0] - last[0], (point[1] - last[1]) * 0.74) >= 0.001) {
+          lastOrigin.current = point;
+          setRouteStart(point);
+        }
+      },
+      onError: setLocationStatus,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!routeStart) return;
+    let active = true;
+    setTripStatus("Finding your route…");
+    fetchDirections(routeStart, firstStop.point, mode).then(route => {
+      if (active) {
+        setTrip(route);
+        setTripStatus("");
+      }
+    }).catch(() => {
+      if (active) {
+        setTrip(null);
+        setTripStatus("Directions are unavailable. The dotted line points toward the stop.");
+      }
+    });
+    return () => { active = false; };
+  }, [routeStart, firstStop.point, mode]);
+
+  const path = trip?.path?.length > 1 ? trip.path : location ? [location, firstStop.point] : NO_WALKS;
+  const directions = useMemo(() => ({
+    destination: firstStop.point, destinationName: firstStop.label, approachPath: path,
+  }), [firstStop, path]);
+
+  return <section className="log-form-page" aria-labelledby="active-excursion-title">
+    <button type="button" className="log-form-back" onClick={onBack}>← Back to excursion setup</button>
+    <div className="log-form-content">
+      <div className="log-form-section">
+        <h1 id="active-excursion-title">{excursion.name}</h1>
+        <p>On the way to Stop 1 · {firstStop.label}</p>
+        <p>{TRAVEL_MODES.find(([value]) => value === mode)?.[1]}{trip && ` · ${minutesLabel(trip.minutes)}`}</p>
+        <div className="log-start-map">
+          <GoogleBostonMap walk={EMPTY_WALK} walks={NO_WALKS} selected={null} onSelect={noop}
+            directions={directions} location={location} showTransitToggle={false}/>
+        </div>
+        {(locationStatus || tripStatus) && <p className="log-map-status" role="status">{locationStatus || tripStatus}</p>}
+      </div>
+    </div>
+  </section>;
 }
 
 function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
@@ -344,10 +499,16 @@ function ExcursionDetails({ excursion, onBack, onSaved }) {
 export function LogPage({ onLog }) {
   const [page, setPage] = useState("menu");
   const [draft, setDraft] = useState(null);
+  const [activeExcursion, setActiveExcursion] = useState(null);
   useEffect(() => {
     document.documentElement.classList.add("log-open");
     return () => document.documentElement.classList.remove("log-open");
   }, []);
+
+  if (page === "new") return <NewExcursionForm initialDraft={activeExcursion} onBack={() => setPage("menu")}
+    onBegin={excursion => { setActiveExcursion(excursion); setPage("active"); }}/>;
+
+  if (page === "active") return <ActiveExcursion excursion={activeExcursion} onBack={() => setPage("new")}/>;
 
   if (page === "previous") return <PreviousExcursionForm initialDraft={draft} onBack={() => setPage("menu")}
     onFinish={excursion => { setDraft(excursion); setPage("details"); }}/>;
@@ -368,7 +529,7 @@ export function LogPage({ onLog }) {
       <h1 id="log-page-title">Log an excursion</h1>
       <div className="log-page-actions">
         <button type="button" className="log-page-action" onClick={() => setPage("previous")}>Log a previous excursion</button>
-        <button type="button" className="log-page-action log-page-action-primary">Start a new excursion</button>
+        <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("new")}>Start a new excursion</button>
       </div>
     </div>
   </section>;

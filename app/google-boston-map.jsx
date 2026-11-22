@@ -544,7 +544,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // In-app directions: dotted walking legs, solid bike and car legs, rides in their line's color, you and the destination.
   useEffect(() => {
     if (!context || !directions) return;
-    const overlays = drawSegments(context, directions.segments);
+    const overlays = directions.approachPath?.length ? [new context.maps.Polyline({
+      map: context.map, path: directions.approachPath.map(mapPoint), strokeOpacity: 0, clickable: false, zIndex: 35,
+      icons: [{ icon: { path: context.maps.SymbolPath.CIRCLE, scale: 3, strokeOpacity: 0,
+        fillColor: ROUTE_THEME.line, fillOpacity: 1 }, offset: "0", repeat: "11px" }],
+    })] : drawSegments(context, directions.segments);
     const markers = [
       directions.origin && addHtmlMarker(context, { point: directions.origin, label: "Your location", className: "google-location", zIndex: 40 }),
       addHtmlMarker(context, { point: directions.destination, label: directions.destinationName, className: "dir-dest-pin", zIndex: 41 }),
@@ -579,7 +583,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
     if (!context || !directions) return;
     const segment = directions.focus != null ? directions.segments?.[directions.focus] : null;
     const points = segment?.path.length ? segment.path
-      : [...(directions.origin ? [directions.origin] : []), directions.destination, ...(directions.segments ?? []).flatMap(item => item.path)];
+      : [...(directions.origin ? [directions.origin] : []), directions.destination,
+        ...(directions.approachPath ?? []), ...(directions.segments ?? []).flatMap(item => item.path)];
     fitPoints(context, points);
   }, [context, directions]);
 

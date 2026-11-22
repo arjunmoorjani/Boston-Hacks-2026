@@ -573,6 +573,9 @@ html.log-open, html.log-open body { overflow: hidden; }
 .log-transport-choice > span { color: var(--muted); font-size: .78rem; font-weight: 800; }
 .log-transport-choice .travel-modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .log-transport-choice .travel-modes button { display: grid; place-items: center; gap: 3px; min-width: 0; padding: 7px 3px; }
+.log-transport-choice .travel-modes button:has(.excursion-recommended) { position: relative; }
+.excursion-recommended { position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: #28f500; border: 1px solid #087c00; }
+.log-transport-choice .travel-modes button small { font-size: .65rem; white-space: normal; }
 .log-form-actions { display: grid; grid-template-columns: 58px 1fr; gap: 12px; align-items: center; }
 .log-add-location {
   width: 58px;
