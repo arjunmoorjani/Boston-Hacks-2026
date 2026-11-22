@@ -9,6 +9,7 @@ import { fetchPlaceProfile } from "../lib/place-profile.mjs";
 import { GoogleBostonMap } from "./google-boston-map";
 import { TRAVEL_MODES } from "./directions-panel";
 import { Icon } from "./icons";
+import { matchSharedRoute } from "../lib/popular.mjs";
 import { addActiveExcursionStop, loadActiveExcursionStopIds, loggedExcursionDatabaseReady, saveLoggedExcursion, startActiveExcursion, updateActiveExcursion } from "../lib/log-excursion.mjs";
 
 const BUILDER_ROUTE_IDS = new Set(["log-builder"]);
@@ -258,7 +259,7 @@ function excursionLeg(trip, origin, destination) {
   };
 }
 
-function ActiveExcursion({ excursion, visible, onEnd }) {
+function ActiveExcursion({ excursion, visible, onEnd, sharedRoutes }) {
   const { activityId, firstStop, mode } = excursion;
   const [stops, setStops] = useState([firstStop]);
   const [nextStop, setNextStop] = useState(emptyStop);
@@ -409,7 +410,10 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
       if (locations.length !== stops.length || locations.some(stop => !stop)) {
         throw new Error("The saved stops could not be matched to this excursion.");
       }
-      await updateActiveExcursion(activityId, { name: name.trim(), status: "completed" });
+      const sharedRoute = matchSharedRoute(sharedRoutes, locations);
+      await updateActiveExcursion(activityId, {
+        name: name.trim(), status: "completed", popular_route_id: sharedRoute?.id ?? null,
+      });
       const path = [];
       for (const leg of legs) {
         for (const point of leg.path) {
@@ -566,7 +570,7 @@ function PreviousExcursionForm({ onBack, onFinish, initialDraft }) {
   </section>;
 }
 
-function ExcursionDetails({ excursion, onBack, onSaved }) {
+function ExcursionDetails({ excursion, onBack, onSaved, sharedRoutes }) {
   const [date, setDate] = useState(todayValue);
   const [priceCategory, setPriceCategory] = useState("FREE");
   const [peopleWith, setPeopleWith] = useState(0);
@@ -608,6 +612,7 @@ function ExcursionDetails({ excursion, onBack, onSaved }) {
       const stored = await saveLoggedExcursion({
         name: excursion.name,
         locations: excursion.locations,
+        popularRouteId: matchSharedRoute(sharedRoutes, excursion.locations)?.id,
         date,
         priceCategory,
         peopleWith,
@@ -683,7 +688,7 @@ function ExcursionDetails({ excursion, onBack, onSaved }) {
   </section>;
 }
 
-export function LogPage({ onLog, visible }) {
+export function LogPage({ onLog, visible, sharedRoutes = [] }) {
   const [page, setPage] = useState("menu");
   const [draft, setDraft] = useState(null);
   const [activeExcursion, setActiveExcursion] = useState(null);
@@ -696,13 +701,13 @@ export function LogPage({ onLog, visible }) {
   if (page === "new") return <NewExcursionForm initialDraft={activeExcursion} onBack={() => setPage("menu")}
     onBegin={excursion => { setActiveExcursion(excursion); setPage("active"); }}/>;
 
-  if (page === "active") return <ActiveExcursion excursion={activeExcursion} visible={visible}
+  if (page === "active") return <ActiveExcursion excursion={activeExcursion} visible={visible} sharedRoutes={sharedRoutes}
     onEnd={excursion => { onLog?.(excursion); setActiveExcursion(null); setPage("saved"); }}/>;
 
   if (page === "previous") return <PreviousExcursionForm initialDraft={draft} onBack={() => setPage("menu")}
     onFinish={excursion => { setDraft(excursion); setPage("details"); }}/>;
 
-  if (page === "details") return <ExcursionDetails excursion={draft} onBack={() => setPage("previous")}
+  if (page === "details") return <ExcursionDetails excursion={draft} sharedRoutes={sharedRoutes} onBack={() => setPage("previous")}
     onSaved={excursion => { onLog?.(excursion); setPage("saved"); }}/>;
 
   if (page === "saved") return <section className="log-page" aria-labelledby="logged-title">

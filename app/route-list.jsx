@@ -77,7 +77,9 @@ export function RouteList({ walks, selectedId, onOpen, status, filterBar, filter
               {favoriteIds.has(walk.id) && <svg className="route-card-heart" width="15" height="15" viewBox="0 0 24 24" aria-label="Favorite">
                 <path d="M12 20.5s-7.5-4.6-7.5-10.6A4.4 4.4 0 0 1 12 7.1a4.4 4.4 0 0 1 7.5 2.8c0 6-7.5 10.6-7.5 10.6z" fill="currentColor"/></svg>}
             </span>
-            <span className="route-card-meta">{summary(walk)} · {walk.area}</span>
+            <span className="route-card-meta">{summary(walk)} · {walk.area}
+              {walk.completedUsers > 0 && ` · ${walk.completedUsers} ${walk.completedUsers === 1 ? "person" : "people"} completed`}
+            </span>
             {walk.tStation && <span className="t-chip" style={{ background: tLine?.color ?? "#575b53", color: tLine?.darkText ? "#212320" : "#fff" }}>
               <Icon name="train" size={14}/>{walk.tStation}
             </span>}
