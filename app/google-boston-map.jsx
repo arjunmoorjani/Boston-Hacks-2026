@@ -4,15 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MetroIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { loadGoogleMaps, mapPoint } from "../lib/google-maps.mjs";
-import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, stopMarker } from "../lib/map-style.mjs";
+import { EXPLORE_GOOGLE_ICONS_STYLE, EXPLORE_STYLE, HIDE_GOOGLE_PARK_T_NAMES, ICON_PATHS, POPULAR_ROUTE_HALOS, ROUTE_THEME, WALK_OPEN_STYLE, placeIconFor, popularMapStops, stopMarker } from "../lib/map-style.mjs";
 import { CELL_DEG, LABEL_ZOOM, MIN_ZOOM as PLACES_MIN_ZOOM, isRealPark, minZoomFor, parkAndTNames, parkWeight, placesForView } from "../lib/nearby-places.mjs";
 import { CITIES, FEATURES, NEIGHBORHOODS, areaLevel } from "../lib/area-labels.mjs";
 import mbtaLines from "./data/mbta-lines.json";
+import { Icon } from "./icons";
 
 // Most places and park names on screen at once, at zoom 15 / 16 / 17+, whatever the screen size (a phone's screen
 // size usually allows fewer: about 10 / 15 / 24 places and 4 / 5 / 9 park names).
 const MAX_PLACES = [15, 25, 40];
 const MAX_PARK_NAMES = [6, 10, 15];
+const MAX_PLACES_FAR_OUT = 10; // logger maps below zoom 15
 
 // Routes and transit lines top out at 24. Keep every name in one protected layer above them.
 const MAP_LABEL_Z_INDEX = 60;
@@ -27,9 +29,25 @@ function tLineWeights(zoom = 14) {
   return { outline: 4 + (10 * closeUp), color: 2 + (6 * closeUp) };
 }
 
+// Browsing many walks: open on the ones in and around downtown (about 2.5 km), so routes are big enough to read,
+// instead of zooming out to show every walk from Medford to Quincy. Farther walks are a pinch away.
+const DOWNTOWN = [42.357, -71.062];
+const CORE_KM = 2.5;
+const BROWSE_MIN_ZOOM = 13;
+function nearDowntown(walk) {
+  const [lat, lng] = walk.stops[0]?.point ?? walk.path[0];
+  const km = Math.hypot((lat - DOWNTOWN[0]) * 111, (lng - DOWNTOWN[1]) * 82);
+  return km <= CORE_KM;
+}
+
 function fitWalks({ map, maps }, walks) {
-  const visible = walks.filter(walk => walk?.path?.length);
+  let visible = walks.filter(walk => walk?.path?.length);
   if (!visible.length) return;
+  let browsing = false;
+  if (visible.length > 3) {
+    const core = visible.filter(nearDowntown);
+    if (core.length >= 3) { visible = core; browsing = true; }
+  }
   const bounds = new maps.LatLngBounds();
   for (const walk of visible) {
     for (const point of walk.path) bounds.extend(mapPoint(point));
@@ -45,6 +63,8 @@ function fitWalks({ map, maps }, walks) {
   const wide = map.getDiv().clientWidth >= 900;
   map.fitBounds(bounds, wide ? { top: 100, left: 450, right: 80, bottom: 60 }
     : { top: 120, left: 40, right: 70, bottom: 40 });
+  // On a phone downtown is wider than the screen (MIT to East Boston): stay at city level, centered on it.
+  if (browsing) maps.event.addListenerOnce(map, "idle", () => { if (map.getZoom() < BROWSE_MIN_ZOOM) map.setZoom(BROWSE_MIN_ZOOM); });
 }
 
 // Fit the map to a set of [lat, lng] points, leaving room for the top bar and the sheet/panel.
@@ -55,7 +75,7 @@ function fitPoints({ map, maps }, points, padding) {
   const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
   if (Math.abs(ne.lat() - sw.lat()) < 0.0008 && Math.abs(ne.lng() - sw.lng()) < 0.0008) {
     map.setCenter(bounds.getCenter());
-    map.setZoom(17);
+    map.setZoom(16); // one place: street level with its neighbors around it (17 was too close on the small log maps)
     return;
   }
   const wide = map.getDiv().clientWidth >= 900;
@@ -163,8 +183,8 @@ function placeMarker(context, place, onClick) {
 
 // A stop as an image (lib/map-style.mjs): its category icon (fork and knife, tree, …) with a number badge,
 // bigger when selected, blue with a check once you've done it.
-function stopMarkerIcon(maps, stop, number, { selected = false, done = false } = {}) {
-  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), selected, done });
+function stopMarkerIcon(maps, stop, number, options) {
+  const { url, width, height, anchor } = stopMarker(number, { icon: placeIconFor(stop.primaryType, stop.name), ...options });
   return { url, scaledSize: new maps.Size(width, height), anchor: new maps.Point(anchor[0], anchor[1]) };
 }
 
@@ -172,14 +192,16 @@ function stopMarkerIcon(maps, stop, number, { selected = false, done = false } =
 // Popular walks glow: soft light-blue halos under the casing, and they stay at full strength.
 // The editor's draft (straight lines between stops) is a dashed, lighter line.
 function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
-  const { casing, glow, lineWeight, casingWeight, dimOpacity, draftOpacity } = ROUTE_THEME;
+  const { casing, glow, dimOpacity, draftOpacity, popularWeightBoost } = ROUTE_THEME;
+  const boost = popular && !draft ? popularWeightBoost : 0;
+  const lineWeight = ROUTE_THEME.lineWeight + boost;
+  const casingWeight = ROUTE_THEME.casingWeight + boost;
   const line = favorite ? ROUTE_THEME.favorite : ROUTE_THEME.line; // hearted walks are pink
   const opacity = draft ? draftOpacity : active || popular || favorite ? 1 : dimOpacity; // favorites stand out too
   const z = active ? 20 : favorite ? 14 : popular ? 10 : 4;
-  const halos = popular && !draft ? [
-    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.12, strokeWeight: casingWeight + 16, clickable: false, zIndex: z }),
-    new maps.Polyline({ map, path, strokeColor: glow, strokeOpacity: 0.22, strokeWeight: casingWeight + 8, clickable: false, zIndex: z }),
-  ] : [];
+  const halos = boost ? POPULAR_ROUTE_HALOS.map(({ extraWeight, opacity }) => new maps.Polyline({
+    map, path, strokeColor: glow, strokeOpacity: opacity, strokeWeight: casingWeight + extraWeight, clickable: false, zIndex: z,
+  })) : [];
   const under = new maps.Polyline({ map, path, strokeColor: casing, strokeOpacity: opacity, strokeWeight: casingWeight, clickable: false, zIndex: z + 1 });
   const over = draft
     ? new maps.Polyline({
@@ -190,7 +212,7 @@ function drawRoute(maps, map, path, { active, draft, popular, favorite }) {
   return [...halos, under, over];
 }
 
-export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, locationStatus, onPlaceClick, onMapClick, directions, userLocationIcon = false, showTransitToggle = true, alwaysShowPlaces = false }) {
+export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId, onOpenWalk, legSegments, focusPath, doneStops = 0, popularIds, favoriteIds, highlight, location, following, onLocate, locationStatus, onPlaceClick, onMapClick, directions, userLocationIcon = false, showTransitToggle = true, alwaysShowPlaces = false }) {
   const container = useRef(null);
   const stops = useRef([]);
   const browseView = useRef(null);
@@ -269,6 +291,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   // Exploring: our own place markers instead of Google's icons (or Google's if ours can't load). A walk is open, or a
   // place is selected (its card is open): no place icons at all, so only the walk's stops or that place show.
   const focused = Boolean(activeWalkId) || Boolean(highlight?.point);
+  const overviewStops = useMemo(() => focused || walk.stops.length ? [] : popularMapStops(walks, popularIds),
+    [focused, walk.stops.length, walks, popularIds]);
+  const overviewPlaceIds = useMemo(() => new Set(overviewStops.map(({ stop }) => stop.placeId)), [overviewStops]);
   const showPlaces = !focused && !nearbyFailed && (alwaysShowPlaces || zoom >= PLACES_MIN_ZOOM);
   // From zoom 15 (where our place data loads) park and T names are ours, on top of everything; Google's are off.
   const ourTopNames = !nearbyFailed && !parkNamesFailed && zoom >= PLACES_MIN_ZOOM;
@@ -341,7 +366,8 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   const placeMarkers = useRef(new Map());
   const visiblePlaces = useMemo(() => showPlaces
     ? nearby.filter(place => place.icon !== "train" && (alwaysShowPlaces || zoom >= minZoomFor(place)) // T stations: names only
-      && !(place.icon === "park" && !isRealPark(place))) : [], [showPlaces, nearby, zoom, alwaysShowPlaces]);
+      && !(place.icon === "park" && !isRealPark(place)) && !overviewPlaceIds.has(place.placeId))
+    : [], [showPlaces, nearby, zoom, alwaysShowPlaces, overviewPlaceIds]);
   useEffect(() => {
     if (!context) return;
     const drawn = placeMarkers.current;
@@ -354,6 +380,31 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   }, [context, visiblePlaces]);
   useEffect(() => () => { for (const marker of placeMarkers.current.values()) marker.setMap(null); }, []);
 
+  useEffect(() => {
+    if (!context) return;
+    const { map, maps } = context;
+    const markers = overviewStops.map(({ stop, walkId }) => {
+      const marker = new maps.Marker({
+        map, position: mapPoint(stop.point), title: stop.name,
+        icon: stopMarkerIcon(maps, stop, null, { popular: true }), zIndex: 28,
+      });
+      const listener = marker.addListener("click", () => {
+        if (stop.placeId && placeClick.current) {
+          placeClick.current(stop.placeId, { name: stop.name, address: stop.address, point: stop.point });
+        } else {
+          walkClick.current?.(walkId);
+        }
+      });
+      return { marker, listener };
+    });
+    return () => {
+      for (const { marker, listener } of markers) {
+        listener.remove();
+        marker.setMap(null);
+      }
+    };
+  }, [context, overviewStops]);
+
   // Google's rules for crowded spots, most prominent place first:
   //  - from zoom 16 a place is its icon and its name together: it shows only if both fit clear of everything already
   //    shown (places, park and T names); otherwise the whole place waits for a closer zoom
@@ -363,7 +414,9 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   useEffect(() => {
     if (!context || (!visiblePlaces.length && !topNames.length)) return;
     const overlaps = (a, b, gap) => a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top;
+    let frame = 0;
     const declutter = () => {
+      if (!container.current) return; // the map closed before this frame ran
       const fixed = [];
       const mapBox = container.current.getBoundingClientRect();
       const area = mapBox.width * mapBox.height;
@@ -371,12 +424,17 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       const cx = mapBox.left + mapBox.width / 2, cy = mapBox.top + mapBox.height / 2;
       const fromCenter = box => Math.hypot((box.left + box.right) / 2 - cx, (box.top + box.bottom) / 2 - cy);
 
-      // Park and T names are drawn on top of everything and nothing else hides them. T names make way only for each
+      // Park and T names are drawn on top of everything else. They make way only for the stop names above; T names make way only for each
       // other; park names make way for each other and are capped for the screen size, like Google's (about 4 on a
       // phone at zoom 15, 6 at 16, 9 at 17). Order: names already showing keep their spot (no flicker as you zoom),
       // then real parks before plazas and playgrounds, then nearest the center. Everything else keeps clear of them.
       const tier = zoom >= 17 ? 2 : zoom >= LABEL_ZOOM ? 1 : 0; // zoom 15 / 16 / 17+
       const parkRoom = Math.min(MAX_PARK_NAMES[tier], Math.max(3, Math.round(area / [60000, 40000, 25000][tier])));
+      // The open walk's own stop names (and a route's "4 min" label) come first: park and T names, and place icons,
+      // make way for them.
+      const ours = [...container.current.querySelectorAll(".stop-label, .dir-route-duration")]
+        .map(element => element.getBoundingClientRect()).filter(box => box.width);
+      fixed.push(...ours);
       const measured = topLabels.current.map(label => {
         const text = label.div.firstElementChild;
         text?.classList.remove("top-hidden");
@@ -394,7 +452,7 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       for (const { label, text, box } of measured) {
         const rivals = label.station ? stationBoxes : parkBoxes;
         const full = !label.station && onScreen(box) && parks >= parkRoom;
-        if (full || rivals.some(other => overlaps(box, other, 4))) { text.classList.add("top-hidden"); continue; }
+        if (full || rivals.some(other => overlaps(box, other, 4)) || ours.some(other => overlaps(box, other, 4))) { text.classList.add("top-hidden"); continue; }
         if (!label.station && onScreen(box)) parks += 1;
         rivals.push(box);
         fixed.push(box);
@@ -402,7 +460,10 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       }
       topShown.current = nowShown;
 
-      const room = Math.min(MAX_PLACES[tier], Math.max(4, Math.round(area / [22000, 14000, 9000][tier])));
+      // Logger maps show icons farther out than zoom 15 too: fewer of them there, and parks count like any place.
+      const farOut = zoom < PLACES_MIN_ZOOM;
+      const room = farOut ? Math.min(MAX_PLACES_FAR_OUT, Math.max(4, Math.round(area / 30000)))
+        : Math.min(MAX_PLACES[tier], Math.max(4, Math.round(area / [22000, 14000, 9000][tier])));
       const withNames = zoom >= LABEL_ZOOM;
       const taken = [...fixed];
       const union = (a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) });
@@ -412,14 +473,14 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         const button = placeMarkers.current.get(place.placeId)?.div.firstElementChild;
         return { place, button, distance: button ? fromCenter(button.querySelector(".poi-dot").getBoundingClientRect()) : Infinity };
       }).filter(item => item.button);
-      items.sort((a, b) => ((b.place.icon === "park") - (a.place.icon === "park"))
+      items.sort((a, b) => (farOut ? 0 : (b.place.icon === "park") - (a.place.icon === "park"))
         || (minZoomFor(a.place) - minZoomFor(b.place)) || (a.distance - b.distance));
       for (const { place, button } of items) {
         const name = button.querySelector(".poi-name");
         button.classList.remove("poi-hidden");
         name.classList.remove("poi-name-hidden");
         const dot = button.querySelector(".poi-dot").getBoundingClientRect();
-        if (place.icon === "park") {
+        if (place.icon === "park" && !farOut) {
           // a park's icon goes with its name: shown together, or (when a bigger park's name is in the way) not at all
           if (ourTopNames && !nowShown.has(place.placeId)) { button.classList.add("poi-hidden"); continue; }
           taken.push(dot); // parks don't use up the room for other places
@@ -429,26 +490,42 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
         const unit = nameBox?.width ? union(dot, nameBox) : dot;
         const gap = withNames ? 6 : 10;
         if (!onScreen(unit)) continue; // off screen: doesn't use up the room
-        // (logger maps keep every icon: no room limit or overlap hiding there)
-        if (!alwaysShowPlaces && (count >= room || taken.some(other => overlaps(unit, other, gap)))) { button.classList.add("poi-hidden"); continue; }
+        if (count >= room || taken.some(other => overlaps(unit, other, gap))) { button.classList.add("poi-hidden"); continue; }
         taken.push(unit);
         count += 1;
       }
     };
-    const frame = requestAnimationFrame(declutter);
-    const idle = context.map.addListener("idle", () => requestAnimationFrame(declutter));
+    frame = requestAnimationFrame(declutter);
+    const idle = context.map.addListener("idle", () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(declutter); });
     return () => { cancelAnimationFrame(frame); idle.remove(); };
-  }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames, alwaysShowPlaces]);
+  }, [context, visiblePlaces, zoom, topNames, focused, ourTopNames]);
 
   // City and neighborhood names in the app's font (CSS shows each set at its zoom levels).
   useEffect(() => {
     if (!context) return;
+    // in priority order: cities, then neighborhoods, then water and other features
     const labels = [
       ...CITIES.map(city => textLabel(context, { point: city.point, text: city.name, className: "city-label" })),
       ...NEIGHBORHOODS.map(hood => textLabel(context, { point: hood.point, text: hood.name, className: "hood-label" })),
       ...FEATURES.map(feature => textLabel(context, { point: feature.point, text: feature.name, className: `feature-label ${feature.kind}-label` })),
     ];
-    return () => { for (const label of labels) label.setMap(null); };
+    // Names that would overlap one already shown wait for a closer zoom (zoom 13 has more of them than fit).
+    const overlaps = (a, b) => a.left < b.right + 6 && a.right + 6 > b.left && a.top < b.bottom + 4 && a.bottom + 4 > b.top;
+    let frame = 0;
+    const declutter = () => {
+      const shown = [];
+      for (const label of labels) {
+        const text = label.div?.firstElementChild;
+        if (!text) continue;
+        text.classList.remove("area-hidden");
+        const box = text.getBoundingClientRect();
+        if (!box.width) continue; // not shown at this zoom
+        if (shown.some(other => overlaps(box, other))) text.classList.add("area-hidden");
+        else shown.push(box);
+      }
+    };
+    const idle = context.map.addListener("idle", () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(declutter); });
+    return () => { cancelAnimationFrame(frame); idle.remove(); for (const label of labels) label.setMap(null); };
   }, [context]);
 
   useEffect(() => {
@@ -510,13 +587,14 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
       const clickListener = hit.addListener("click", () => walkClick.current?.(item.id));
       return [{ drawn: drawRoute(maps, map, path, { active: active || draft, draft, popular: popularIds?.has(item.id), favorite: favoriteIds?.has(item.id) }), hit, clickListener }];
     }));
+    const popular = popularIds?.has(walk.id);
     const stopLabels = walk.stops.map(stop => textLabel(context, {
       point: stop.point, text: stop.name, className: "stop-label", transform: "translate(18px,-50%)",
     }));
     stops.current = walk.stops.map((stop, index) => {
       const marker = new maps.Marker({
         map, position: mapPoint(stop.point), title: `Stop ${index + 1}: ${stop.name}`,
-        icon: stopMarkerIcon(maps, stop, index + 1), zIndex: 30,
+        icon: stopMarkerIcon(maps, stop, index + 1, { popular, favorite: favoriteIds?.has(walk.id) }), zIndex: 30,
       });
       marker.addListener("click", () => onSelect(index));
       return marker;
@@ -626,10 +704,12 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
   useEffect(() => {
     if (!context) return;
     stops.current.forEach((marker, index) => {
-      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, { selected: selected === index, done: index < doneStops }));
+      marker.setIcon(stopMarkerIcon(context.maps, walk.stops[index], index + 1, {
+        selected: selected === index, done: index < doneStops, popular: popularIds?.has(walk.id), favorite: favoriteIds?.has(walk.id),
+      }));
       marker.setZIndex(selected === index ? 31 : 30);
     });
-  }, [context, walk, selected, doneStops]);
+  }, [context, walk, selected, doneStops, popularIds, favoriteIds]);
 
   useEffect(() => {
     if (!context || !location) return;
@@ -659,6 +739,11 @@ export function GoogleBostonMap({ walk, walks, selected, onSelect, activeWalkId,
 
   return <section className={`map google-map ${zoomClasses}`} aria-label="Interactive Boston map">
     <div className="google-map-canvas" ref={container}/>
+    {onLocate && <button className="locate-toggle transit-toggle catalog-button" type="button" disabled={!context}
+      aria-label={following ? "Stop showing my location" : "Show my location"} aria-pressed={following}
+      title={following ? "Stop showing my location" : "Show my location"} onClick={onLocate}>
+      <Icon name="locate" size={22}/>
+    </button>}
     {showTransitToggle && <button className="transit-toggle catalog-button" type="button" disabled={!context}
       aria-label={transit ? "Hide T lines" : "Show T lines"} aria-pressed={transit}
       title={transit ? "Hide T lines" : "Show T lines"}

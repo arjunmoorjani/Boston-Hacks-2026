@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MapIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { MapIcon, PlusSignIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { AuthGate } from "./auth-gate";
 import { BostonMap } from "./boston-map";
 import { GoogleBostonMap } from "./google-boston-map";
@@ -15,12 +15,12 @@ import { PlanDetail } from "./plan-detail";
 import { PlanEditor } from "./plan-editor";
 import { ProfilePage, RankPrompt } from "./profile";
 import { LogPage } from "./log-page";
-import { deleteLoggedExcursion } from "../lib/log-excursion.mjs";
+import { completeSharedRoute, deleteLoggedExcursion } from "../lib/log-excursion.mjs";
 import { walks as fallbackWalks, walkStats } from "./walks";
 import { buildWalkingRoute, googleMapsConfigured } from "../lib/google-maps.mjs";
 import { followSteps, legFresh, legKey, legMinutes, legsOf, navSteps, splitPathAtStops, travelTotal } from "../lib/legs.mjs";
 import { NavBanner } from "./nav-banner";
-import { popularWalkIds } from "../lib/popular.mjs";
+import { loadSharedRoutes, popularWalkIds, rankSharedWalks } from "../lib/popular.mjs";
 import { endPlaceSearchSession, googlePlaceSuggestions, localPlaceMatches, mergePlaceResults, MIN_GOOGLE_CHARS } from "../lib/place-search.mjs";
 import { fetchPlaceProfile } from "../lib/place-profile.mjs";
 import { fetchDirections } from "../lib/directions.mjs";
@@ -30,6 +30,8 @@ import { loadRoutes, routesForMap } from "../lib/routes.mjs";
 import { anyActive, applyFilters, categoryCounts, emptyFilters, matchesQuery } from "../lib/route-filters.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
 import { completionFor, emptyProfile, guestDisplayName, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
+import { presetAvatarSource, resolveProfileAvatar, saveAccountProfile } from "../lib/profile-avatar.mjs";
+import { withExcursionCardMeta, withNearestTStop } from "../lib/excursion-card-meta.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -44,20 +46,31 @@ export default function Home() {
 
 function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const userId = user?.id;
-  const [walks, setWalks] = useState(fallbackWalks);
+  const [routeCatalog, setWalks] = useState(fallbackWalks);
+  const [sharedRoutes, setSharedRoutes] = useState([]);
+  const rankedWalks = useMemo(() => rankSharedWalks(routeCatalog, sharedRoutes), [routeCatalog, sharedRoutes]);
+  const popularityRequest = useRef(0);
   const [walksStatus, setWalksStatus] = useState("Loading premade walks…");
   const [selectedWalkId, setSelectedWalkId] = useState(null);
   const [selectedCompletionId, setSelectedCompletionId] = useState(null);
   const [filters, setFilters] = useState(emptyFilters); // one set of filters for the list and the map
   const [selected, setSelected] = useState(null);
-  const [following, setFollowing] = useState(true);
+  // Location is off until you ask for it: the locate button on the map (follow me), or doing a walk (turn-by-turn
+  // follows you). It's kept in memory only while one of those is on, never stored or sent anywhere.
+  const [following, setFollowing] = useState(false);
   const [location, setLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [step, setStep] = useState(null);
   const [complete, setComplete] = useState(false);
+  const [savingCompletion, setSavingCompletion] = useState(false);
+  const [completionError, setCompletionError] = useState("");
+  const walkRun = useRef(null);
+  const completing = useRef(false);
   const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [accountName, setAccountName] = useState(null);
+  const [accountAvatarPath, setAccountAvatarPath] = useState(null);
+  const [accountAvatarUrl, setAccountAvatarUrl] = useState(null);
   const [nameLoading, setNameLoading] = useState(Boolean(userId));
   const [nameError, setNameError] = useState("");
   const signupName = user?.user_metadata?.display_name;
@@ -93,23 +106,25 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   legRoutesRef.current = legRoutes;
   const [navIndex, setNavIndex] = useState(0);    // the turn-by-turn step you're on during a walk
   const [navHidden, setNavHidden] = useState(false);
-  const suggestData = useMemo(() => buildSuggestData(walks), [walks]);
-  const allWalks = useMemo(() => [...walks, ...profile.customWalks], [walks, profile.customWalks]);
+  const catalogWalks = useMemo(() => rankedWalks.map(item => withNearestTStop(item, rankedWalks)), [rankedWalks]);
+  const suggestData = useMemo(() => buildSuggestData(catalogWalks), [catalogWalks]);
+  const customWalks = useMemo(() => profile.customWalks.map(item => withExcursionCardMeta(item, catalogWalks)), [profile.customWalks, catalogWalks]);
+  const allWalks = useMemo(() => [...catalogWalks, ...customWalks], [catalogWalks, customWalks]);
   // Catalog walks get every filter; your own plans only the search (they have no category/tags).
   // Favorites: walks you've hearted (this browser). The Favorites tab narrows the list and the map to them.
   const [listTab, setListTab] = useState("all");
   const favoriteIds = useMemo(() => new Set(profile.favorites ?? []), [profile.favorites]);
   const availableWalks = useMemo(() => {
-    const all = [...applyFilters(walks, filters), ...profile.customWalks.filter(item => matchesQuery(item, filters.query))];
+    const all = [...applyFilters(catalogWalks, filters), ...customWalks.filter(item => matchesQuery(item, filters.query))];
     return listTab === "favorites" ? all.filter(item => favoriteIds.has(item.id)) : all;
-  }, [walks, filters, profile.customWalks, listTab, favoriteIds]);
+  }, [catalogWalks, filters, customWalks, listTab, favoriteIds]);
   // category chip counts follow the tab: on Favorites they count favorites
-  const counts = useMemo(() => categoryCounts(listTab === "favorites" ? walks.filter(item => favoriteIds.has(item.id)) : walks, filters),
-    [walks, filters, listTab, favoriteIds]);
-  const popularIds = useMemo(() => popularWalkIds(walks, profile.completions), [walks, profile.completions]); // these glow on the map
+  const counts = useMemo(() => categoryCounts(listTab === "favorites" ? catalogWalks.filter(item => favoriteIds.has(item.id)) : catalogWalks, filters),
+    [catalogWalks, filters, listTab, favoriteIds]);
+  const popularIds = useMemo(() => popularWalkIds(catalogWalks), [catalogWalks]);
   const baseWalk = useMemo(() => {
     const stored = allWalks.find(item => item.id === selectedWalkId) ?? null; // a filter never closes the plan you're looking at
-    if (!stored || stored.category !== "Logged excursion") return stored;
+    if (!stored || stored.category !== "Logged route") return stored;
     const related = profile.completions.filter(item => item.walkId === stored.id);
     const activity = related.find(item => item.photoPaths?.length || item.activityId || item.comments
       || item.priceCategory || Number.isFinite(item.peopleWith)) ?? related[0];
@@ -158,7 +173,9 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const navEntry = navLeg ? entryOf(navLeg, navMode) : null;
   const navKey = navLeg ? legKey(navLeg.from, navLeg.to, navMode) : null;
   const navList = useMemo(() => navEntry?.status === "ready" ? navSteps(navEntry.result, navLeg.to.name) : [], [navEntry, navLeg]);
-  const navFollow = useMemo(() => followSteps(navList, navIndex, following ? location : null), [navList, navIndex, following, location]);
+  const walking = view === "detail" && step != null;
+  const trackLocation = following || walking;
+  const navFollow = useMemo(() => followSteps(navList, navIndex, trackLocation ? location : null), [navList, navIndex, trackLocation, location]);
   const navStep = navList[navFollow.index];
   const navFocus = useMemo(() => navLeg && !navHidden && navEntry?.status === "ready"
     ? (navStep?.path?.length ? navStep.path : [navLeg.to.point]) : null, [navLeg, navHidden, navEntry, navStep]);
@@ -245,6 +262,26 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     return () => controller.abort();
   }, []);
 
+  const refreshSharedRoutes = useCallback(async () => {
+    if (!client) return;
+    const request = ++popularityRequest.current;
+    try {
+      const routes = await loadSharedRoutes(client);
+      if (request === popularityRequest.current) setSharedRoutes(routes);
+    } catch {
+      // The bundled catalog remains available if Supabase is unreachable.
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void refreshSharedRoutes();
+    window.addEventListener("focus", refreshSharedRoutes);
+    return () => {
+      popularityRequest.current += 1;
+      window.removeEventListener("focus", refreshSharedRoutes);
+    };
+  }, [refreshSharedRoutes]);
+
   useEffect(() => {
     const stored = loadProfile();
     setProfile(guestName === null ? stored : { ...stored, name: guestName }); // browser-only, so after the first render
@@ -258,31 +295,39 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   useEffect(() => {
     if (!userId) return;
     const controller = new AbortController();
-    async function loadName() {
+    async function loadAccountProfile() {
       try {
-        const { data, error } = await client.from("profiles").select("display_name")
+        const { data, error } = await client.from("profiles").select("display_name, avatar_path")
           .eq("id", userId).abortSignal(controller.signal).single();
         if (error) throw error;
-        if (!controller.signal.aborted) setAccountName(data.display_name);
+        if (!controller.signal.aborted) {
+          setAccountName(data.display_name);
+          setAccountAvatarPath(data.avatar_path);
+          const avatarUrl = await resolveProfileAvatar(client, data.avatar_path).catch(() => null);
+          if (!controller.signal.aborted) setAccountAvatarUrl(avatarUrl);
+        }
       } catch {
         if (!controller.signal.aborted) setNameError("Couldn’t load your account profile.");
       } finally {
         if (!controller.signal.aborted) setNameLoading(false);
       }
     }
-    loadName();
+    loadAccountProfile();
     return () => controller.abort();
   }, [client, userId]);
 
-  async function renameProfile(name) {
+  async function saveProfileSettings({ name, avatarPath, avatarFile }) {
     if (!userId) {
-      updateProfile({ name });
+      if (avatarFile) throw new Error("Sign in to upload your own profile picture.");
+      updateProfile({ name, avatarPath });
       return;
     }
-    const { data, error } = await client.from("profiles").update({ display_name: name })
-      .eq("id", userId).select("display_name").single();
-    if (error) throw error;
-    setAccountName(data.display_name);
+    const saved = await saveAccountProfile({
+      client, userId, name, avatarPath, avatarFile, previousAvatarPath: accountAvatarPath,
+    });
+    setAccountName(saved.displayName);
+    setAccountAvatarPath(saved.avatarPath);
+    setAccountAvatarUrl(saved.avatarUrl);
     setNameError("");
   }
 
@@ -338,14 +383,14 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   }, [navFollow.index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!following) return;
+    if (!trackLocation) return;
     if (!window.isSecureContext || !navigator.geolocation) {
       setLocationStatus("Location needs a secure connection (HTTPS) or localhost.");
       setFollowing(false);
       return;
     }
     setLocationStatus("Finding your location…");
-    return watchUserLocation(navigator.geolocation, {
+    const stop = watchUserLocation(navigator.geolocation, {
       onLocation: nextLocation => {
         setLocation(nextLocation);
         setLocationStatus("");
@@ -355,7 +400,15 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
         setFollowing(false);
       },
     });
-  }, [following]);
+    return () => { stop(); setLocation(null); }; // turned off: forget where you were
+  }, [trackLocation]);
+
+  // Location messages ("Allow location access…") get out of the way after a few seconds.
+  useEffect(() => {
+    if (!locationStatus || locationStatus === "Finding your location…") return;
+    const timer = setTimeout(() => setLocationStatus(""), 5000);
+    return () => clearTimeout(timer);
+  }, [locationStatus]);
 
   const sheet = useRef(null);
   // Phones scroll the page to move the sheet; on desktop the sheet scrolls by itself.
@@ -370,6 +423,8 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   }
 
   function resetWalkInteraction() {
+    walkRun.current = null;
+    setCompletionError("");
     setPlanNotice("");
     setSelected(null);
     setStep(null);
@@ -390,6 +445,7 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   }
 
   function logPreviousExcursion({ name, locations, legModes = [], route, date, priceCategory = "FREE", peopleWith = 0, comments, photoPaths = [], activityId = null }) {
+    if (activityId) void refreshSharedRoutes();
     const walkId = `logged:${crypto.randomUUID()}`;
     const stops = locations.map((location, index) => ({
       id: location.placeId ? `google:${location.placeId}` : `${walkId}:${index}`,
@@ -397,16 +453,17 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       name: location.label,
       address: location.address,
       point: location.point,
-      note: index === 0 ? "Excursion starting point." : "A stop on this excursion.",
+      note: index === 0 ? "Route starting point." : "A stop on this route.",
     }));
+    const cardMeta = withExcursionCardMeta({ id: walkId, category: "Logged route", stops, minutes: route.minutes }, catalogWalks);
     const walk = {
       ...route,
       id: walkId,
       title: name,
-      area: "Your excursion",
-      category: "Logged excursion",
+      area: cardMeta.area,
+      category: "Logged route",
       symbol: "route",
-      description: comments || "A previous excursion you logged.",
+      description: comments || "A previous route you logged.",
       completedAt: new Date(`${date}T12:00:00`).toISOString(),
       priceCategory,
       peopleWith,
@@ -415,14 +472,18 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
       activityId,
       legModes,
       stops,
+      durationMin: Math.max(1, Math.round(route.minutes)),
+      tStation: cardMeta.tStation,
+      tLines: cardMeta.tLines,
     };
     const completion = {
       id: crypto.randomUUID(),
       walkId,
       title: name,
-      area: "Your excursion",
-      category: "Logged excursion",
-      tLines: [],
+      area: cardMeta.area,
+      category: "Logged route",
+      tStation: cardMeta.tStation,
+      tLines: cardMeta.tLines,
       path: route.path,
       stops: stops.length,
       miles: Number((route.meters / 1609.344).toFixed(1)),
@@ -503,12 +564,23 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     return true;
   }
 
+  function openAlbumRoute(route) {
+    const completion = profile.completions.find(item => item.activityId === route.id);
+    const record = customWalks.find(item => item.activityId === route.id);
+    if (completion && openWalk(completion.walkId, true, completion.id)) return true;
+    if (record && openWalk(record.id, true)) return true;
+    const shared = route.sharedRouteId && catalogWalks.find(item => item.popularRouteId === route.sharedRouteId);
+    return shared ? openWalk(shared.id, true) : false;
+  }
+
   async function deleteSelectedActivity() {
     const activity = profile.completions.find(item => item.id === selectedCompletionId);
     if (!activity || !walk) throw new Error("This activity could not be found.");
-    const logged = walk.category === "Logged excursion";
-    if (logged && walk.activityId) {
-      await deleteLoggedExcursion({ activityId: walk.activityId, photoPaths: walk.photoPaths ?? [] });
+    const logged = walk.category === "Logged route";
+    const activityId = activity.activityId ?? (logged ? walk.activityId : null);
+    if (activityId) {
+      await deleteLoggedExcursion({ activityId, photoPaths: activity.photoPaths ?? walk.photoPaths ?? [] });
+      void refreshSharedRoutes();
     }
     updateProfile(old => logged ? {
       completions: old.completions.filter(item => item.walkId !== walk.id),
@@ -526,19 +598,54 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     collapseSheet();
   }
 
-  function deleteCustomWalk(id) {
-    updateProfile(old => ({ customWalks: old.customWalks.filter(item => item.id !== id), ranking: old.ranking.filter(item => item !== id) }));
-    if (selectedWalkId === id) { changeRoute(null); setView("list"); }
+  async function deleteSelectedCustomWalk() {
+    if (!walk || !profile.customWalks.some(item => item.id === walk.id)) throw new Error("This plan could not be found.");
+    if (supabaseReady && userId) {
+      const { error } = await client.from("activities").delete().eq("name", walk.title);
+      if (error) throw error;
+    }
+    updateProfile(old => ({
+      customWalks: old.customWalks.filter(item => item.id !== walk.id),
+      completions: old.completions.filter(item => item.walkId !== walk.id),
+      ranking: old.ranking.filter(id => id !== walk.id),
+      favorites: (old.favorites ?? []).filter(id => id !== walk.id),
+    }));
+    changeRoute(null);
+    setView("list");
+    collapseSheet();
   }
 
-  function advance() {
+  async function advance() {
+    if (completing.current) return;
+    setCompletionError("");
     if (step === walk.stops.length - 1) {
-      setStep(null);
-      setSelected(null);
-      setComplete(true);
-      updateProfile(old => ({ completions: [completionFor(walk, stats), ...old.completions] }));
+      const run = walkRun.current;
+      const completion = completionFor(walk, stats);
+      if (walk.popularRouteId && run) {
+        completing.current = true;
+        setSavingCompletion(true);
+        try {
+          await completeSharedRoute({ ...run, popularRouteId: walk.popularRouteId });
+          completion.activityId = run.activityId;
+          void refreshSharedRoutes();
+        } catch (error) {
+          if (walkRun.current === run) setCompletionError(error.message || "Couldn’t save the completed route. Try again.");
+          return;
+        } finally {
+          completing.current = false;
+          setSavingCompletion(false);
+        }
+      }
+      updateProfile(old => ({ completions: [completion, ...old.completions] }));
+      if (walkRun.current === run) {
+        walkRun.current = null;
+        setStep(null);
+        setSelected(null);
+        setComplete(true);
+      }
       return;
     }
+    if (step === null) walkRun.current = { activityId: crypto.randomUUID(), startedAt: new Date().toISOString() };
     const next = step === null ? 0 : step + 1;
     setStep(next);
     setSelected(next);
@@ -690,7 +797,8 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
 
   return <main className="app">
     <div className="map-panel">
-      <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={following ? location : null}
+      <MapView walk={mapWalk} walks={mapWalks} selected={selected} onSelect={selectStop} location={trackLocation ? location : null}
+        onLocate={() => setFollowing(value => !value)}
         activeWalkId={view === "detail" ? selectedWalkId : null} onOpenWalk={openWalk}
         legSegments={view === "detail" ? legSegments : null} focusPath={navFocus ?? (view === "list" ? placeFocus : null)}
         highlight={selectedPlace}
@@ -724,12 +832,15 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
             onDirections={openDirections}
             onBack={() => { changeRoute(null); setView("list"); collapseSheet(); }}
             onSelectStop={index => { selectStop(index); collapseSheet(); }}
-            onAdvance={advance} onEndWalk={() => { setStep(null); setSelected(null); }} onFork={fork}
+            onAdvance={advance} savingCompletion={savingCompletion} completionError={completionError}
+            onEndWalk={resetWalkInteraction} onFork={fork}
             legs={legRows} travel={travel} onLegMode={setLegMode}
             onLegSteps={index => legs[index] && ensureLeg(legs[index].from, legs[index].to, modeOf(index))}
             navHidden={navHidden && Boolean(navLeg)} onShowNav={() => { setNavHidden(false); collapseSheet(); }}
-            onDeleteActivity={selectedCompletionId ? deleteSelectedActivity : null}
-            deleteLabel={walk.category === "Logged excursion" ? "Delete excursion" : "Delete activity"}
+            onDeleteActivity={selectedCompletionId ? deleteSelectedActivity
+              : profile.customWalks.some(item => item.id === walk.id) ? deleteSelectedCustomWalk : null}
+            deleteLabel={walk.category === "Logged route" ? "Delete route"
+              : profile.customWalks.some(item => item.id === walk.id) ? "Delete plan" : "Delete activity"}
             routing={<>
                 {planNotice && <p className="plan-notice" role="status"><Icon name="check" size={16}/>{planNotice}</p>}
                 {walk.warnings?.length > 0 && <p className="route-warning">{walk.warnings.join(" ")}</p>}
@@ -766,26 +877,36 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     </section>
     {placeProfile && <PlaceProfile key={placeProfile.placeId} placeId={placeProfile.placeId} fallback={placeProfile.fallback}
       onClose={closePlace} addLabel={addLabelFor(placeProfile.placeId)}
-      onDirections={place => openDirections({ name: place.name, point: place.point, placeId: placeProfile.placeId })}
-      onAdd={place => addPlace({
-        osm_id: `google:${placeProfile.placeId}`, placeId: placeProfile.placeId, name: place.name,
-        latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
-        tags: { description: place.summary ?? "" },
-      })}/>}
-    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={availableWalks} onClose={closeProfile}
-      onRename={renameProfile} nameLoading={nameLoading} nameError={nameError}
+      onDirections={place => {
+        setShowProfile(false);
+        openDirections({ name: place.name, point: place.point, placeId: placeProfile.placeId });
+      }}
+      onAdd={place => {
+        setShowProfile(false);
+        addPlace({
+          osm_id: `google:${placeProfile.placeId}`, placeId: placeProfile.placeId, name: place.name,
+          latitude: place.point?.[0], longitude: place.point?.[1], address: place.address ?? "",
+          tags: { description: place.summary ?? "" },
+        });
+      }}/>}
+    {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={allWalks} onClose={closeProfile}
+      avatarPath={userId ? accountAvatarPath : profile.avatarPath ?? null}
+      avatarUrl={userId ? accountAvatarUrl : presetAvatarSource(profile.avatarPath)} canUploadAvatar={Boolean(userId)}
+      onSaveProfile={saveProfileSettings} nameLoading={nameLoading} nameError={nameError}
       onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
-      onRank={ranking => updateProfile({ ranking })}
-      onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
+      albumClient={client} onOpenAlbumRoute={openAlbumRoute} onOpenAlbumPlace={openPlace}
+      onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
-    <div hidden={!showLog}><LogPage visible={showLog} onLog={logPreviousExcursion}/></div>
+    <div hidden={!showLog}><LogPage visible={showLog} sharedRoutes={sharedRoutes} onLog={logPreviousExcursion}/></div>
     <nav className="bottom-nav" aria-label="Primary navigation">
       <button type="button" className="bottom-nav-button" aria-label="Map" aria-current={!showProfile && !showLog ? "page" : undefined}
         onClick={openMapScreen}>
         <HugeiconsIcon icon={MapIcon} size={24}/>
       </button>
       <button type="button" className="bottom-nav-log" aria-label="Log" aria-current={showLog ? "page" : undefined}
-        onClick={() => { setShowProfile(false); setShowLog(true); }}/>
+        onClick={() => { setShowProfile(false); setShowLog(true); }}>
+        <HugeiconsIcon icon={PlusSignIcon} size={26} strokeWidth={2.4}/>
+      </button>
       <button type="button" className="bottom-nav-button" aria-label="Profile" aria-current={showProfile ? "page" : undefined}
         onClick={() => { setShowLog(false); setShowProfile(true); }}>
         <HugeiconsIcon icon={UserIcon} size={24}/>

@@ -3,14 +3,15 @@
 // Plan detail inside the bottom sheet: header, getting there by T, the stops, "Keep going"
 // suggestions from the last stop, and a sticky Modify / Do this plan bar.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Icon } from "./icons";
 import { HeartButton } from "./heart-button";
 import { distanceLabel, minutesLabel } from "../lib/directions.mjs";
-import { LEG_MODES, LONG_WALK_M, navSteps } from "../lib/legs.mjs";
+import { LEG_MODES, LONG_WALK_M, bikeNotQuicker, navSteps } from "../lib/legs.mjs";
 import { LINES, lineFamily, duration, costLabel } from "./route-list";
 import { suggestRoutes } from "../lib/suggest.mjs";
 import { ActivityPhotos, RouteThumb } from "./profile";
+import { fetchPlacePhoto } from "../lib/place-profile.mjs";
 
 const PRICE = {
   PRICE_LEVEL_FREE: "free", PRICE_LEVEL_INEXPENSIVE: "$", PRICE_LEVEL_MODERATE: "$$",
@@ -54,6 +55,8 @@ function LegRow({ leg, current, onMode, onSteps }) {
       </div>
       {long && <p className="plan-leg-hint">Long walk. The T or a bike may be quicker.</p>}
       {mode === "TRANSIT" && result && !ride && <p className="plan-leg-hint">No T ride helps here, so this is walking the whole way.</p>}
+      {mode === "BICYCLING" && bikeNotQuicker(leg, entry) && <p className="plan-leg-hint">
+        Walking is quicker here (about {minutesLabel(leg.estimateMin)}): bikes have to go around one-way streets and walk-only paths.</p>}
       {open && result && <ol className="dir-steps">{navSteps(result, leg.to.name).slice(0, -1).map((step, i) => <li key={i}>
         <span>{step.instruction}{step.note && <small>{step.note}</small>}</span>
         {step.meters > 0 && <em>{distanceLabel(step.meters)}</em>}
@@ -65,27 +68,36 @@ function LegRow({ leg, current, onMode, onSteps }) {
 const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
 
 function DeleteActivity({ label, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const subject = label === "Delete route" ? "route" : label === "Delete plan" ? "plan" : "activity";
 
   async function remove() {
     if (deleting) return;
-    const detail = label === "Delete excursion" ? " This also removes its photos and database record." : "";
-    if (!window.confirm(`Are you sure you want to delete this card?${detail}`)) return;
     setDeleting(true);
     setError("");
     try {
       await onDelete();
-    } catch (deleteError) {
-      setError(deleteError?.message || "Couldn’t delete this activity.");
+    } catch {
+      setError(`Couldn’t delete this ${subject}. Try again.`);
       setDeleting(false);
     }
   }
 
   return <div className="plan-delete-control">
-    <button type="button" className="activity-delete-button" disabled={deleting} onClick={remove}>
-      {deleting ? "Deleting…" : label}
-    </button>
+    {confirming
+      ? <div className="activity-delete-confirm" role="alertdialog" aria-labelledby="delete-confirm-title">
+          <p id="delete-confirm-title">Delete this {subject}?<span>This can’t be undone.</span></p>
+          <div>
+            <button type="button" className="activity-delete-cancel" disabled={deleting}
+              onClick={() => { setConfirming(false); setError(""); }}>Cancel</button>
+            <button type="button" className="activity-delete-button" disabled={deleting} onClick={remove}>
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      : <button type="button" className="activity-delete-button" onClick={() => setConfirming(true)}>{label}</button>}
     {error && <p className="activity-delete-error" role="alert">{error}</p>}
   </div>;
 }
@@ -96,7 +108,7 @@ function ExcursionSummary({ walk, stats }) {
   const group = Number.isFinite(walk.peopleWith)
     ? walk.peopleWith === 0 ? "Solo" : `With ${walk.peopleWith} ${walk.peopleWith === 1 ? "person" : "people"}`
     : null;
-  return <section className="activity excursion-detail-card" aria-label={`${walk.title} excursion details`}>
+  return <section className="activity excursion-detail-card" aria-label={`${walk.title} route details`}>
     <header>
       <div>
         <small>{[date, walk.area].filter(Boolean).join(" · ")}</small>
@@ -108,6 +120,9 @@ function ExcursionSummary({ walk, stats }) {
       <div><span>Stops</span><strong>{walk.stops.length}</strong></div>
       <div><span>Time</span><strong>{minutesLabel(stats.minutes)}</strong></div>
     </div>
+    {walk.tStation && <span className="t-chip" style={{ background: LINES.find(line => line.id === lineFamily(walk.tLines?.[0]))?.color ?? "#575b53", color: "#fff" }}>
+      <Icon name="train" size={14}/>{walk.tStation}
+    </span>}
     {(price || group) && <div className="activity-details">
       {price && <span>{price}</span>}
       {group && <span>{group}</span>}
@@ -120,7 +135,7 @@ function ExcursionSummary({ walk, stats }) {
 
 export function PlanDetail({ walk, stats, suggestData, step, complete, selected, onDirections,
   onBack, onSelectStop, onAdvance, onEndWalk, onFork, rankSlot, routing, legs = [], travel, onLegMode, onLegSteps, navHidden, onShowNav,
-  favorite = false, onFavorite, onDeleteActivity, deleteLabel = "Delete activity" }) {
+  favorite = false, onFavorite, onDeleteActivity, deleteLabel = "Delete activity", savingCompletion = false, completionError }) {
   const lines = [...new Set((walk.tLines ?? []).map(lineFamily))].map(id => LINES.find(line => line.id === id)).filter(Boolean);
   const theme = walk.tags?.find(tag => !["Free", "Under $40"].includes(tag)) ?? walk.category; // cost is already in the meta line
   const label = [theme, walk.area].filter(Boolean).join(" · ");
@@ -138,9 +153,9 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
   }, [walk, last, suggestData]);
 
   const walking = step !== null;
-  const loggedExcursion = walk.category === "Logged excursion";
+  const loggedExcursion = walk.category === "Logged route";
 
-  return <div className="plan-detail">
+  return <div className={`plan-detail ${favorite ? "is-favorite" : ""}`}>
     <button type="button" className="back-link" onClick={onBack}><Icon name="arrowLeft" size={18}/>All walks</button>
     {loggedExcursion
       ? <ExcursionSummary walk={walk} stats={stats}/>
@@ -151,6 +166,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
             {onFavorite && <HeartButton on={favorite} onToggle={onFavorite} label={walk.title}/>}
           </div>
           <p className="plan-meta">{meta}</p>
+          <StopPhotos stops={walk.stops} onOpen={onSelectStop}/>
         </>}
 
     {walking && <div className="walk-progress" role="status">
@@ -160,6 +176,7 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
         ? <button type="button" className="inline-link" onClick={() => onDirections(stopTarget(walk.stops[step]))}><Icon name="walk" size={14}/>Directions from where you are</button>
         : navHidden && <button type="button" className="inline-link" onClick={onShowNav}><Icon name="straight" size={14}/>Show turn-by-turn</button>}
     </div>}
+    {completionError && <p className="route-warning" role="alert">{completionError}</p>}
     {complete && <p className="completed" role="status"><Icon name="check" size={17}/> Walk completed</p>}
     {rankSlot}
     {routing}
@@ -218,13 +235,48 @@ export function PlanDetail({ walk, stats, suggestData, step, complete, selected,
 
     {(walking || !loggedExcursion || !onDeleteActivity) && <div className="plan-bar">
       {walking
-        ? <button type="button" className="plan-secondary" onClick={onEndWalk}>End</button>
+        ? <button type="button" className="plan-secondary" disabled={savingCompletion} onClick={onEndWalk}>End</button>
         : <button type="button" className="plan-secondary" onClick={() => onFork([])}>Modify</button>}
       {!walking && onDeleteActivity
         ? <DeleteActivity label={deleteLabel} onDelete={onDeleteActivity}/>
-        : <button type="button" className="plan-primary" onClick={onAdvance}>
-            {!walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
+        : <button type="button" className="plan-primary" disabled={savingCompletion} onClick={onAdvance}>
+            {savingCompletion ? "Saving…" : !walking ? complete ? "Do it again" : "Do this plan" : step === walk.stops.length - 1 ? "Finish plan" : "Next stop"}
           </button>}
     </div>}
+  </div>;
+}
+
+// One photo per stop (from Google Places), side by side like a place's photos, each with its stop number and name.
+// Tapping one opens that stop's place card (like tapping the stop in the list).
+// Stops without a photo are left out; nothing shows until the first photo is in.
+function StopPhotos({ stops, onOpen }) {
+  const [photos, setPhotos] = useState({});
+  const key = stops.map(stop => stop.placeId ?? "").join(",");
+  useEffect(() => {
+    setPhotos({});
+    let active = true;
+    stops.forEach((stop, index) => {
+      if (!stop.placeId) return;
+      fetchPlacePhoto(stop.placeId, 600)
+        .then(photo => { if (active && photo) setPhotos(current => ({ ...current, [index]: photo })); })
+        .catch(() => {});
+    });
+    return () => { active = false; };
+  }, [key]);
+
+  const shown = stops.map((stop, index) => ({ stop, index, photo: photos[index] })).filter(item => item.photo);
+  if (!shown.length) return null;
+  return <div className="stop-photos" aria-label="Photos of the stops">
+    {shown.map(({ stop, index, photo }) => <figure key={index}>
+      <button type="button" className="stop-photo-open" onClick={() => onOpen?.(index)} aria-label={`Open stop ${index + 1}, ${stop.name}`}>
+        {/* no referrerPolicy: Google checks the referrer against the key's website restrictions */}
+        <img src={photo.src} alt="" loading="lazy"/>
+      </button>
+      <figcaption>
+        <span className="stop-photo-name"><span className="stop-photo-number">{index + 1}</span><span className="stop-photo-title">{stop.name}</span></span>
+        {photo.author && <span className="stop-photo-credit">{photo.author.uri
+          ? <a href={photo.author.uri} target="_blank" rel="noreferrer">{photo.author.name}</a> : photo.author.name}</span>}
+      </figcaption>
+    </figure>)}
   </div>;
 }

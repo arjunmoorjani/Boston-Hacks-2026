@@ -152,9 +152,9 @@ function Welcome({ client, startupError, onGuest }) {
 
   return <main className="welcome">
     <section className="welcome-card" aria-labelledby="welcome-title">
-      <div className="brand"><span><Icon name="route" size={20}/></span>sidewalk<span className="brand-period">.</span></div>
+      <div className="brand"><span><Icon name="route" size={20}/></span>Routable<span className="brand-period">.</span></div>
       <h1 id="welcome-title">{enteringAsGuest ? "Continue as guest"
-        : creating ? "Create account" : mode === "signin" ? "Sign in" : "Welcome to Sidewalk"}</h1>
+        : creating ? "Create account" : mode === "signin" ? "Sign in" : "Welcome to Routable"}</h1>
       <>
         {(error || startupError) && <p className="editor-error" role="alert">{error || startupError}</p>}
         {confirmation && <p className="welcome-confirmation" role="status">{confirmation}</p>}
