@@ -54,9 +54,11 @@ export function RouteThumb({ path }) {
         overlays = [
           new maps.Polyline({ map, path: mapPath, strokeColor: ROUTE_THEME.casing, strokeWeight: 7, strokeOpacity: 1 }),
           new maps.Polyline({ map, path: mapPath, strokeColor: ROUTE_THEME.line, strokeWeight: 4, strokeOpacity: 1 }),
-          ...[mapPath[0], mapPath.at(-1)].map(center => new maps.Circle({
-            map, center, radius: 18, fillColor: ROUTE_THEME.stop, fillOpacity: 1,
-            strokeColor: ROUTE_THEME.stopRing, strokeOpacity: 1, strokeWeight: 3,
+          // start and end dots: a fixed size on screen (a Circle is sized in meters and swallows short routes)
+          ...[mapPath[0], mapPath.at(-1)].map(position => new maps.Marker({
+            map, position, clickable: false,
+            icon: { path: maps.SymbolPath.CIRCLE, scale: 6, fillColor: ROUTE_THEME.stop, fillOpacity: 1,
+              strokeColor: ROUTE_THEME.stopRing, strokeOpacity: 1, strokeWeight: 2.5 },
           })),
         ];
         if (path.length === 1) map.setZoom(15);

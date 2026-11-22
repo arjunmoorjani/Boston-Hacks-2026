@@ -703,13 +703,13 @@ export function LogPage({ onLog, visible }) {
     onFinish={excursion => { setDraft(excursion); setPage("details"); }}/>;
 
   if (page === "details") return <ExcursionDetails excursion={draft} onBack={() => setPage("previous")}
-    onSaved={excursion => { onLog?.(excursion); setPage("saved"); }}/>;
+    onSaved={excursion => { onLog?.(excursion); setDraft(null); setPage("saved"); }}/>;
 
   if (page === "saved") return <section className="log-page" aria-labelledby="logged-title">
     <div className="log-page-content log-saved">
       <h1 id="logged-title">Excursion logged</h1>
       <p>Your route is now in your Profile activity.</p>
-      <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("previous")}>Log another excursion</button>
+      <button type="button" className="log-page-action log-page-action-primary" onClick={() => setPage("menu")}>Log another excursion</button>
     </div>
   </section>;
 
