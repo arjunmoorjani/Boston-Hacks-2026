@@ -68,27 +68,36 @@ function LegRow({ leg, current, onMode, onSteps }) {
 const stopTarget = stop => ({ name: stop.name, point: stop.point, placeId: stop.placeId ?? null });
 
 function DeleteActivity({ label, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const subject = label === "Delete excursion" ? "excursion" : "activity";
 
   async function remove() {
     if (deleting) return;
-    const detail = label === "Delete excursion" ? " This also removes its photos and database record." : "";
-    if (!window.confirm(`Are you sure you want to delete this card?${detail}`)) return;
     setDeleting(true);
     setError("");
     try {
       await onDelete();
-    } catch (deleteError) {
-      setError(deleteError?.message || "Couldn’t delete this activity.");
+    } catch {
+      setError(`Couldn’t delete this ${subject}. Try again.`);
       setDeleting(false);
     }
   }
 
   return <div className="plan-delete-control">
-    <button type="button" className="activity-delete-button" disabled={deleting} onClick={remove}>
-      {deleting ? "Deleting…" : label}
-    </button>
+    {confirming
+      ? <div className="activity-delete-confirm" role="alertdialog" aria-labelledby="delete-confirm-title">
+          <p id="delete-confirm-title">Delete this {subject}?<span>This can’t be undone.</span></p>
+          <div>
+            <button type="button" className="activity-delete-cancel" disabled={deleting}
+              onClick={() => { setConfirming(false); setError(""); }}>Cancel</button>
+            <button type="button" className="activity-delete-button" disabled={deleting} onClick={remove}>
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      : <button type="button" className="activity-delete-button" onClick={() => setConfirming(true)}>{label}</button>}
     {error && <p className="activity-delete-error" role="alert">{error}</p>}
   </div>;
 }

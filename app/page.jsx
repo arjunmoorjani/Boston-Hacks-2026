@@ -30,6 +30,7 @@ import { loadRoutes, routesForMap } from "../lib/routes.mjs";
 import { anyActive, applyFilters, categoryCounts, emptyFilters, matchesQuery } from "../lib/route-filters.mjs";
 import { buildSuggestData } from "../lib/suggest-data.mjs";
 import { completionFor, emptyProfile, guestDisplayName, loadProfile, saveProfile, toggleFavorite } from "../lib/profile-store.mjs";
+import { presetAvatarSource, resolveProfileAvatar, saveAccountProfile } from "../lib/profile-avatar.mjs";
 
 const MapView = googleMapsConfigured ? GoogleBostonMap : BostonMap;
 const maxStops = 5;
@@ -60,6 +61,8 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   const [profile, setProfile] = useState(emptyProfile); // name, finished plans, ranking, saved plans (this browser)
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [accountName, setAccountName] = useState(null);
+  const [accountAvatarPath, setAccountAvatarPath] = useState(null);
+  const [accountAvatarUrl, setAccountAvatarUrl] = useState(null);
   const [nameLoading, setNameLoading] = useState(Boolean(userId));
   const [nameError, setNameError] = useState("");
   const signupName = user?.user_metadata?.display_name;
@@ -262,31 +265,39 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
   useEffect(() => {
     if (!userId) return;
     const controller = new AbortController();
-    async function loadName() {
+    async function loadAccountProfile() {
       try {
-        const { data, error } = await client.from("profiles").select("display_name")
+        const { data, error } = await client.from("profiles").select("display_name, avatar_path")
           .eq("id", userId).abortSignal(controller.signal).single();
         if (error) throw error;
-        if (!controller.signal.aborted) setAccountName(data.display_name);
+        if (!controller.signal.aborted) {
+          setAccountName(data.display_name);
+          setAccountAvatarPath(data.avatar_path);
+          const avatarUrl = await resolveProfileAvatar(client, data.avatar_path).catch(() => null);
+          if (!controller.signal.aborted) setAccountAvatarUrl(avatarUrl);
+        }
       } catch {
         if (!controller.signal.aborted) setNameError("Couldn’t load your account profile.");
       } finally {
         if (!controller.signal.aborted) setNameLoading(false);
       }
     }
-    loadName();
+    loadAccountProfile();
     return () => controller.abort();
   }, [client, userId]);
 
-  async function renameProfile(name) {
+  async function saveProfileSettings({ name, avatarPath, avatarFile }) {
     if (!userId) {
-      updateProfile({ name });
+      if (avatarFile) throw new Error("Sign in to upload your own profile picture.");
+      updateProfile({ name, avatarPath });
       return;
     }
-    const { data, error } = await client.from("profiles").update({ display_name: name })
-      .eq("id", userId).select("display_name").single();
-    if (error) throw error;
-    setAccountName(data.display_name);
+    const saved = await saveAccountProfile({
+      client, userId, name, avatarPath, avatarFile, previousAvatarPath: accountAvatarPath,
+    });
+    setAccountName(saved.displayName);
+    setAccountAvatarPath(saved.avatarPath);
+    setAccountAvatarUrl(saved.avatarUrl);
     setNameError("");
   }
 
@@ -538,11 +549,6 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
     collapseSheet();
   }
 
-  function deleteCustomWalk(id) {
-    updateProfile(old => ({ customWalks: old.customWalks.filter(item => item.id !== id), ranking: old.ranking.filter(item => item !== id) }));
-    if (selectedWalkId === id) { changeRoute(null); setView("list"); }
-  }
-
   function advance() {
     if (step === walk.stops.length - 1) {
       setStep(null);
@@ -786,10 +792,11 @@ function Planner({ user, client, guestName, onSignOut, onExitGuest }) {
         tags: { description: place.summary ?? "" },
       })}/>}
     {showProfile && <ProfilePage profile={{ ...profile, name: displayName }} walks={availableWalks} onClose={closeProfile}
-      onRename={renameProfile} nameLoading={nameLoading} nameError={nameError}
+      avatarPath={userId ? accountAvatarPath : profile.avatarPath ?? null}
+      avatarUrl={userId ? accountAvatarUrl : presetAvatarSource(profile.avatarPath)} canUploadAvatar={Boolean(userId)}
+      onSaveProfile={saveProfileSettings} nameLoading={nameLoading} nameError={nameError}
       onSignOut={onSignOut} onExitGuest={onExitGuest} savingOuting={savingOuting}
-      onRank={ranking => updateProfile({ ranking })}
-      onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onDeleteWalk={deleteCustomWalk} onSample={data => updateProfile(data)}
+      onOpenWalk={(id, completionId) => openWalk(id, true, completionId)} onSample={data => updateProfile(data)}
       onReset={() => updateProfile({ completions: [], ranking: [] })}/>}
     <div hidden={!showLog}><LogPage visible={showLog} onLog={logPreviousExcursion}/></div>
     <nav className="bottom-nav" aria-label="Primary navigation">

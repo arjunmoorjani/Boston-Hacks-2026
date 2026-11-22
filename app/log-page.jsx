@@ -401,9 +401,9 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
     });
   }
 
-  function endExcursion() {
+  function finishExcursion() {
     if (!name.trim()) return;
-    save("Ending excursion…", async () => {
+    save("Finishing excursion…", async () => {
       const legs = stops.map((stop, index) => excursionLeg(
         plannedTrips[index], stops[index - 1]?.point ?? initialOrigin.current, stop.point,
       ));
@@ -413,7 +413,6 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
       if (locations.length !== stops.length || locations.some(stop => !stop)) {
         throw new Error("The saved stops could not be matched to this excursion.");
       }
-      await updateActiveExcursion(activityId, { name: name.trim(), status: "completed" });
       const path = [];
       for (const leg of legs) {
         for (const point of leg.path) {
@@ -437,7 +436,7 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
     <div className="log-form-content">
       <div className="log-form-section">
         <input className="active-excursion-name" type="text" aria-label="Excursion name" value={name}
-          readOnly={saving === "Ending excursion…"}
+          readOnly={saving === "Finishing excursion…"}
           onChange={event => {
             setFailedName(null);
             setName(event.target.value);
@@ -452,8 +451,13 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
       </div>
 
       <div className="log-form-section">
-        <button type="button" className="log-form-back" aria-expanded={addingStop} aria-controls="active-stop-form"
-          onClick={() => setAddingStop(current => !current)}> {addingStop ? "Hide new stop" : "+ Add a stop"}</button>
+        <div className="log-form-actions">
+          <button type="button" className="log-add-location" aria-label="Add another stop"
+            aria-expanded={addingStop} aria-controls="active-stop-form"
+            onClick={() => setAddingStop(current => !current)}>+</button>
+          <button type="button" className="log-finish" disabled={!name.trim() || Boolean(saving)}
+            onClick={finishExcursion}>Finish</button>
+        </div>
         <form id="active-stop-form" onSubmit={addStop} hidden={!addingStop}>
           {addingStop && <ExcursionStopPicker fieldId="active-next-stop" label={`Stop ${stops.length + 1}`}
             stop={nextStop} number={stops.length + 1} onChange={setNextStop}/>}
@@ -464,8 +468,6 @@ function ActiveExcursion({ excursion, visible, onEnd }) {
 
       {saveError && <p className="log-save-error" role="alert">{saveError}</p>}
       {saving && <p className="log-map-status" role="status">{saving}</p>}
-      <button type="button" className="log-save-excursion" disabled={!name.trim() || Boolean(saving)}
-        onClick={endExcursion}>End excursion</button>
     </div>
   </section>;
 }
@@ -625,6 +627,7 @@ function ExcursionDetails({ excursion, onBack, onSaved }) {
     setError("");
     try {
       const stored = await saveLoggedExcursion({
+        activityId: excursion.activityId,
         name: excursion.name,
         locations: excursion.locations,
         date,
@@ -716,13 +719,14 @@ export function LogPage({ onLog, visible }) {
     onBegin={excursion => { setActiveExcursion(excursion); setPage("active"); }}/>;
 
   if (page === "active") return <ActiveExcursion excursion={activeExcursion} visible={visible}
-    onEnd={excursion => { onLog?.(excursion); setActiveExcursion(null); setPage("saved"); }}/>;
+    onEnd={excursion => { setDraft(excursion); setPage("details"); }}/>;
 
   if (page === "previous") return <PreviousExcursionForm initialDraft={draft} onBack={() => setPage("menu")}
     onFinish={excursion => { setDraft(excursion); setPage("details"); }}/>;
 
-  if (page === "details") return <ExcursionDetails excursion={draft} onBack={() => setPage("previous")}
-    onSaved={excursion => { onLog?.(excursion); setDraft(null); setPage("saved"); }}/>;
+  if (page === "details") return <ExcursionDetails excursion={draft}
+    onBack={() => setPage(activeExcursion ? "active" : "previous")}
+    onSaved={excursion => { onLog?.(excursion); setActiveExcursion(null); setDraft(null); setPage("saved"); }}/>;
 
   if (page === "saved") return <section className="log-page" aria-labelledby="logged-title">
     <div className="log-page-content log-saved">
